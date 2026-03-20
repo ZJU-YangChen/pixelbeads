@@ -1,0 +1,768 @@
+
+document.addEventListener('DOMContentLoaded', () => {
+    // Check if dependencies loaded
+    if (typeof pixelit === 'undefined') {
+        console.error("PixelIt library not loaded");
+        alert("错误: 核心库未加载，请检查 js/pixelit.js 是否存在");
+        return;
+    }
+
+    // Elements - Studio
+    const fileInput = document.getElementById('fileInput');
+    const sourceImage = document.getElementById('sourceImage');
+    const scaleInput = document.getElementById('scaleInput');
+    const scaleNumInput = document.getElementById('scaleNumInput'); // New
+    const scaleVal = document.getElementById('scaleVal');
+    const generateBtn = document.getElementById('generateBtn');
+    const canvas = document.getElementById('pixelitcanvas');
+    const paletteSelect = document.getElementById('paletteSelect');
+    // const paletteFile = document.getElementById('paletteFile'); // Removed
+    const statsTableBody = document.querySelector('#statsTable tbody');
+    const completeBtn = document.getElementById('completeBtn');
+    
+    // Elements - Inventory
+    const inventoryTableBody = document.querySelector('#inventoryTable tbody');
+    const addBeadBtn = document.getElementById('addBeadBtn');
+    const saveNewBeadBtn = document.getElementById('saveNewBeadBtn');
+    const addBeadForm = document.getElementById('addBeadForm');
+    const addBeadFn = new bootstrap.Modal(document.getElementById('addBeadModal'));
+
+    // Elements - History
+    const historyList = document.getElementById('historyList');
+
+    // Export Buttons
+    const btnPng = document.getElementById('downloadPng');
+    const btnCsv = document.getElementById('downloadCsv');
+    const btnStats = document.getElementById('downloadStats');
+    const chkNumbers = document.getElementById('showNumbers');
+
+    // State
+    let px = new pixelit({
+        to: canvas,
+        from: sourceImage,
+        scale: 8,
+        maxWidth: 2000,
+        maxHeight: 2000
+    });
+    px.drawLabels = true;
+    px.labelInterval = 5;
+
+    let currentGridResponse = null;
+    let originalGridResponse = null; // Store original for reset
+    let currentCounts = null; // Store count result
+
+
+    // Default Palettes
+    // Web Safe 216 colors + some extras to reach ~256
+    const generateSafeColors = () => {
+        const colors = [];
+        const steps = [0, 51, 102, 153, 204, 255];
+        for(let r of steps) {
+            for(let g of steps) {
+                for(let b of steps) {
+                    colors.push([r,g,b]);
+                }
+            }
+        }
+        // Add some grays
+        for(let i=0; i<256; i+=16) colors.push([i,i,i]);
+        return colors;
+    };
+
+    const Palettes = {
+        high_fidelity: generateSafeColors(),
+        grayscale: [
+            [0,0,0], [32,32,32], [64,64,64], [96,96,96], [128,128,128], 
+            [160,160,160], [192,192,192], [224,224,224], [255,255,255]
+        ]
+    };
+
+    // --- Logic ---
+
+    // 1. Initialize
+    const init = () => {
+        renderInventoryTable();
+        renderHistoryList();
+        updatePalette();
+    };
+
+    // Helper: Update Palette
+    const updatePalette = () => {
+        const val = paletteSelect.value;
+        if (val === 'my_inventory') {
+            const inventoryPalette = StorageService.getPaletteForPixelIt();
+            if (inventoryPalette.length > 0) {
+                px.setPalette(inventoryPalette);
+            } else {
+                alert('库存为空！请在“我的豆子仓库”中添加颜色，或者选择其他色板。');
+                paletteSelect.value = 'grayscale';
+                updatePalette();
+            }
+        } else if (Palettes[val]) {
+            px.setPalette(Palettes[val]);
+        }
+    };
+
+    // --- Inventory Management ---
+    
+    function renderInventoryTable() {
+        const inventory = StorageService.getInventory();
+        inventoryTableBody.innerHTML = '';
+        
+        inventory.forEach((item, index) => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td class="align-middle"><span class="color-box" style="background-color: ${item.hex};"></span></td>
+                <td class="align-middle">${item.name}</td>
+                <td class="align-middle">${item.hex}</td>
+                <td class="align-middle">${item.id}</td>
+                <td class="align-middle" title="双击修改" style="cursor: pointer;">
+                    <span class="stock-val text-primary fw-bold" data-id="${item.id}">${item.count}</span>
+                    <input type="number" class="form-control form-control-sm d-none stock-input" value="${item.count}" style="width: 100px;">
+                </td>
+                <td class="align-middle">
+                    <button class="btn btn-sm btn-outline-danger delete-bead" data-id="${item.id}">删除</button>
+                    <button class="btn btn-sm btn-success d-none save-stock" data-id="${item.id}">保存</button>
+                </td>
+            `;
+            inventoryTableBody.appendChild(tr);
+
+            // Bind Edit Event
+            const valSpan = tr.querySelector('.stock-val');
+            const input = tr.querySelector('.stock-input');
+            const saveBtn = tr.querySelector('.save-stock');
+            const deleteBtn = tr.querySelector('.delete-bead');
+
+            // Toggle Edit
+            tr.cells[4].addEventListener('dblclick', () => {
+                valSpan.classList.add('d-none');
+                input.classList.remove('d-none');
+                input.focus();
+                saveBtn.classList.remove('d-none');
+                deleteBtn.classList.add('d-none');
+            });
+
+            // Save Logic
+            const saveStock = () => {
+                const newCount = parseInt(input.value);
+                if (!isNaN(newCount) && newCount >= 0) {
+                    item.count = newCount;
+                    StorageService.saveInventory(inventory);
+                    valSpan.innerText = newCount;
+                }
+                valSpan.classList.remove('d-none');
+                input.classList.add('d-none');
+                saveBtn.classList.add('d-none');
+                deleteBtn.classList.remove('d-none');
+                
+                // If Palette is My Inventory, refresh pixelit palette
+                if (paletteSelect.value === 'my_inventory') updatePalette();
+            };
+
+            saveBtn.addEventListener('click', saveStock);
+            input.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') saveStock();
+            });
+
+            deleteBtn.addEventListener('click', () => {
+                if(confirm(`确定删除 ${item.name} 吗？`)) {
+                    const newInv = inventory.filter(x => x.id !== item.id);
+                    StorageService.saveInventory(newInv);
+                    renderInventoryTable();
+                    if (paletteSelect.value === 'my_inventory') updatePalette();
+                }
+            });
+        });
+    }
+
+    addBeadBtn.addEventListener('click', () => {
+        addBeadForm.reset();
+        addBeadFn.show();
+    });
+
+    saveNewBeadBtn.addEventListener('click', () => {
+        const formData = new FormData(addBeadForm);
+        const newItem = {
+            id: parseInt(formData.get('id')),
+            name: formData.get('name'),
+            hex: formData.get('hex'),
+            count: parseInt(formData.get('count'))
+        };
+        
+        if (!newItem.name || !newItem.hex || isNaN(newItem.id)) {
+            alert('请完整填写信息');
+            return;
+        }
+
+        const inv = StorageService.getInventory();
+        inv.push(newItem);
+        StorageService.saveInventory(inv);
+        
+        addBeadFn.hide();
+        renderInventoryTable();
+        if (paletteSelect.value === 'my_inventory') updatePalette();
+    });
+
+    // --- Studio Interactions ---
+
+    fileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            sourceImage.src = event.target.result;
+            sourceImage.onload = () => {
+                sourceImage.style.display = 'block';
+            };
+        };
+        reader.readAsDataURL(file);
+    });
+
+    scaleInput.addEventListener('input', (e) => {
+        const val = e.target.value;
+        scaleVal.innerText = val;
+        scaleNumInput.value = val;
+    });
+
+    scaleNumInput.addEventListener('input', (e) => {
+        let val = parseInt(e.target.value);
+        if(!val) return;
+        if(val > 1000) val = 1000; 
+        
+        scaleVal.innerText = val;
+        // Update range if within range, otherwise range stays at max
+        scaleInput.value = val > 100 ? 100 : val; 
+    });
+
+    paletteSelect.addEventListener('change', updatePalette);
+
+    generateBtn.addEventListener('click', () => {
+        if (!sourceImage.src) {
+            alert('请先上传图片');
+            return;
+        }
+        
+        // 1. Get Target Size (Max Dimension)
+        const targetSize = parseInt(scaleNumInput.value) || 50;
+
+        // 2. Configure PixelIt to resize source to target resolution
+        // Set scale to 1 (1:1 mapping from resized source to grid)
+        px.setScale(1)
+          .setMaxWidth(targetSize)
+          .setMaxHeight(targetSize);
+
+        // 3. Generate Grid (this will resize internal canvas to targetSize x H)
+        px.pixelate({ returnGrid: true });
+        currentGridResponse = px.getGrid();
+        originalGridResponse = JSON.parse(JSON.stringify(currentGridResponse));
+        
+        // 4. Re-draw for Display (Upscale)
+        // We want the visual canvas to be large enough (e.g. max 800px wide)
+        // Heuristic: visual pixel size
+        let visualScale = Math.floor(800 / targetSize);
+        if (visualScale < 1) visualScale = 1; // At least 1px
+        if (visualScale > 20) visualScale = 20; // Cap at 20px per block
+
+        px.setScale(visualScale);
+        px.drawGrid(currentGridResponse);
+        
+        updateStats(currentGridResponse);
+    });
+
+
+    // --- State for Modes ---
+    // let isBeadingMode = false; // Removed
+    let isManualEditMode = false;
+    let currentBrush = { r: 0, g: 0, b: 0 }; // Default black
+
+    // Edit Mode Toggle
+    const toggleEditModeBtn = document.getElementById('toggleEditModeBtn');
+    const editToolsDiv = document.getElementById('editTools');
+    const resetEditsBtn = document.getElementById('resetEditsBtn');
+
+    if (toggleEditModeBtn && editToolsDiv) {
+        toggleEditModeBtn.addEventListener('click', () => {
+            isManualEditMode = !isManualEditMode;
+            if (isManualEditMode) {
+                toggleEditModeBtn.innerText = "🔒 结束编辑 (锁定画布)";
+                toggleEditModeBtn.classList.replace('btn-outline-danger', 'btn-danger');
+                editToolsDiv.style.opacity = '1';
+                editToolsDiv.style.pointerEvents = 'auto';
+            } else {
+                toggleEditModeBtn.innerText = "🔓 点击开启编辑模式";
+                toggleEditModeBtn.classList.replace('btn-danger', 'btn-outline-danger');
+                editToolsDiv.style.opacity = '0.5';
+                editToolsDiv.style.pointerEvents = 'none';
+            }
+        });
+
+        if (resetEditsBtn) {
+            resetEditsBtn.addEventListener('click', () => {
+                if (!originalGridResponse) return;
+                if (confirm("确定要清除所有手工编辑吗？将重置为最初生成的图纸。")) {
+                    currentGridResponse = JSON.parse(JSON.stringify(originalGridResponse));
+                    px.drawGrid(currentGridResponse);
+                    updateStats(currentGridResponse);
+                }
+            });
+        }
+    }
+
+    // --- Magnifier Logic ---
+    const magCanvas = document.getElementById('magnifierCanvas');
+    const lensOverlay = document.getElementById('lensOverlay');
+    const btnNextBlock = document.getElementById('btnNextBlock');
+    const lensSizeInput = document.getElementById('lensSizeInput');
+    const lensSizeVal = document.getElementById('lensSizeVal'); // New
+    const openMagnifierBtn = document.getElementById('openMagnifierBtn');
+    const closeMagnifierBtn = document.getElementById('closeMagnifierBtn');
+    const magnifierFloatingWindow = document.getElementById('magnifierFloatingWindow');
+
+    // State
+    const magState = {
+        enabled: false,
+        x: 0, 
+        y: 0,
+        size: 10, 
+        zoom: 2, // Unused logic variable, but effectively scale
+        isDragging: false
+    };
+
+    const pxMag = new pixelit({ to: magCanvas, scale: 20 }); 
+    pxMag.drawLabels = true;
+    pxMag.labelInterval = 1;
+
+    // Init Logic
+    if(openMagnifierBtn) {
+        openMagnifierBtn.addEventListener('click', () => {
+            magState.enabled = true;
+            if(magnifierFloatingWindow) magnifierFloatingWindow.style.display = 'block';
+            if(lensOverlay) lensOverlay.style.display = 'block';
+            updateMagnifier();
+        });
+    }
+
+    if(closeMagnifierBtn) {
+        closeMagnifierBtn.addEventListener('click', () => {
+             magState.enabled = false;
+             if(magnifierFloatingWindow) magnifierFloatingWindow.style.display = 'none';
+             if(lensOverlay) lensOverlay.style.display = 'none';
+        });
+    }
+
+    if(lensSizeInput) {
+        const updateLensInput = (e) => {
+            let v = parseInt(e.target.value);
+            // Min/Max are controlled by HTML range
+            magState.size = v;
+            if(lensSizeVal) lensSizeVal.innerText = v + '格';
+            updateMagnifier();
+        };
+
+        lensSizeInput.addEventListener('input', updateLensInput);
+        lensSizeInput.addEventListener('change', updateLensInput);
+    }
+/*
+    if(magZoomInput) {
+        magZoomInput.addEventListener('input', (e) => {
+            magState.zoom = parseInt(e.target.value);
+            if(magZoomVal) magZoomVal.innerText = magState.zoom + 'x';
+            updateMagnifier();
+        });
+    }
+*/
+    // Floating Window Drag Logic
+    const magnifierWindow = document.getElementById('magnifierFloatingWindow');
+    const magnifierDragHeader = document.getElementById('magnifierDragHeader');
+
+    if (magnifierDragHeader && magnifierWindow) {
+        let isWindowDragging = false;
+        let pX = 0, pY = 0;
+
+        magnifierDragHeader.addEventListener('mousedown', (e) => {
+            isWindowDragging = true;
+            pX = e.clientX;
+            pY = e.clientY;
+            magnifierDragHeader.style.cursor = 'grabbing';
+        });
+
+        document.addEventListener('mouseup', () => {
+            isWindowDragging = false;
+            if(magnifierDragHeader) magnifierDragHeader.style.cursor = 'move';
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (isWindowDragging) {
+                e.preventDefault();
+                const dX = e.clientX - pX;
+                const dY = e.clientY - pY;
+                pX = e.clientX;
+                pY = e.clientY;
+                magnifierWindow.style.top = (magnifierWindow.offsetTop + dY) + "px";
+                magnifierWindow.style.left = (magnifierWindow.offsetLeft + dX) + "px";
+            }
+        });
+    }
+
+    if(btnNextBlock) {
+        btnNextBlock.addEventListener('click', () => {
+            if(!currentGridResponse) return;
+            
+            const gridW = currentGridResponse[0].length;
+            const gridH = currentGridResponse.length;
+            
+            magState.x += magState.size;
+            
+            if (magState.x >= gridW) {
+                magState.x = 0;
+                magState.y += magState.size;
+            }
+            
+            if (magState.y >= gridH) {
+                magState.y = 0;
+                magState.x = 0;
+                alert("已到达图纸末尾，回到起点");
+            }
+            updateMagnifier();
+        });
+    }
+
+    function updateMagnifier() {
+        if (!magState.enabled || !currentGridResponse || !lensOverlay) {
+            if(lensOverlay) lensOverlay.style.display = 'none';
+            return;
+        }
+
+        const gridW = currentGridResponse[0].length;
+        const gridH = currentGridResponse.length;
+
+        if (magState.x < 0) magState.x = 0;
+        if (magState.y < 0) magState.y = 0;
+        if (magState.x >= gridW) magState.x = gridW - 1;
+        if (magState.y >= gridH) magState.y = gridH - 1;
+
+        const subGrid = [];
+        const endX = Math.min(magState.x + magState.size, gridW);
+        const endY = Math.min(magState.y + magState.size, gridH);
+        
+        for(let r=magState.y; r<endY; r++) {
+            subGrid.push(currentGridResponse[r].slice(magState.x, endX));
+        }
+
+        // Auto-fit scale logic
+        // Container is approx 480px wide (card width) - padding.
+        // We removed the height restriction, so we just fit to Width.
+        const safeWidth = 420;
+        
+        const cols = subGrid[0].length;
+        const rows = subGrid.length;
+        
+        // Calculate scale to fit width
+        let newScale = Math.floor(safeWidth / cols);
+        
+        // Cap the max scale so 1x1 block doesn't explode the screen
+        if (newScale > 50) newScale = 50;
+        
+        // Minimum scale to be readable
+        const finalScale = Math.max(newScale, 15); 
+
+        pxMag.setScale(finalScale);
+        pxMag.startOffsetX = magState.x;
+        pxMag.startOffsetY = magState.y;
+        pxMag.drawGrid(subGrid);
+
+        const rect = canvas.getBoundingClientRect();
+        if(gridW === 0 || gridH === 0) return;
+
+        // Correct layout calculation incorporating margins from px.drawLabels
+        // We need to know:
+        // 1. px.margin (25 if labels are on)
+        // 2. px.scale (8)
+        // 3. The actual rendered width/height of the canvas (rect.width/height)
+        
+        const pxMargin = px.drawLabels ? 25 : 0; // Hardcoded margin from pixelit.js (this.margin=25)
+        const logicalW = (gridW * px.scale) + pxMargin;
+        const logicalH = (gridH * px.scale) + pxMargin;
+        
+        // Ratios: CSS pixels per Logical unit
+        const ratioX = rect.width / logicalW;
+        const ratioY = rect.height / logicalH;
+        
+        // Offset of the Grid Origin in CSS pixels
+        const originX = pxMargin * ratioX;
+        const originY = pxMargin * ratioY;
+        
+        // Size of one block in CSS pixels
+        const visualBlockW = px.scale * ratioX;
+        const visualBlockH = px.scale * ratioY;
+
+        lensOverlay.style.display = 'block';
+        lensOverlay.style.left = (canvas.offsetLeft + originX + magState.x * visualBlockW) + 'px';
+        lensOverlay.style.top = (canvas.offsetTop + originY + magState.y * visualBlockH) + 'px';
+        
+        // Width/Height of overlay
+        // We clip it if it exceeds bounds, but usually visualBlockW handles scaling.
+        const dW = Math.min(magState.size, gridW - magState.x);
+        const dH = Math.min(magState.size, gridH - magState.y);
+        
+        lensOverlay.style.width = (dW * visualBlockW) + 'px';
+        lensOverlay.style.height = (dH * visualBlockH) + 'px';
+        
+        lensOverlay.style.pointerEvents = 'auto'; 
+        lensOverlay.style.cursor = 'grab';
+    }
+
+    window.addEventListener('resize', () => { setTimeout(updateMagnifier, 100); });
+
+    if(lensOverlay) {
+        lensOverlay.addEventListener('mousedown', (e) => {
+            e.stopPropagation(); 
+            magState.isDragging = true;
+            lensOverlay.style.cursor = 'grabbing';
+        });
+    }
+
+    window.addEventListener('mouseup', () => { 
+        if(magState.isDragging) {
+            magState.isDragging = false;
+            if(lensOverlay) lensOverlay.style.cursor = 'grab';
+        }
+    });
+
+    window.addEventListener('mousemove', (e) => {
+        if (magState.isDragging && magState.enabled && currentGridResponse) {
+            // Re-calculate geometry
+            const rect = canvas.getBoundingClientRect();
+            const gridW = currentGridResponse[0].length;
+            const gridH = currentGridResponse.length;
+            
+            const pxMargin = px.drawLabels ? 25 : 0; 
+            const logicalW = (gridW * px.scale) + pxMargin;
+            const logicalH = (gridH * px.scale) + pxMargin;
+            const ratioX = rect.width / logicalW;
+            const ratioY = rect.height / logicalH;
+            
+            const originX = pxMargin * ratioX;
+            const originY = pxMargin * ratioY;
+            const visualBlockW = px.scale * ratioX;
+            const visualBlockH = px.scale * ratioY;
+            
+            const mx = e.clientX - rect.left - originX;
+            const my = e.clientY - rect.top - originY;
+            
+            const gx = Math.floor(mx / visualBlockW);
+            const gy = Math.floor(my / visualBlockH);
+            
+            const half = Math.floor(magState.size / 2);
+            magState.x = gx - half;
+            magState.y = gy - half;
+            updateMagnifier();
+        }
+    });
+
+    // Bead Mode Toggle - REMOVED
+
+    // Canvas Interaction
+    canvas.addEventListener('mousedown', (e) => {
+        if (!currentGridResponse) return;
+        
+        const rect = canvas.getBoundingClientRect();
+        
+        // Use offsetX for precise mouse position relative to element padding box
+        // Map Visual Coordinates -> Internal Canvas Coordinates
+        const ratioX = canvas.width / rect.width; 
+        const ratioY = canvas.height / rect.height;
+        
+        const canvasX = e.offsetX * ratioX;
+        const canvasY = e.offsetY * ratioY;
+        
+        const pxMargin = px.drawLabels ? 25 : 0;
+        
+        const x = Math.floor((canvasX - pxMargin) / px.scale);
+        const y = Math.floor((canvasY - pxMargin) / px.scale);
+
+        if (x < 0 || x >= currentGridResponse[0].length || y < 0 || y >= currentGridResponse.length) return;
+        
+        if (isManualEditMode) {
+            const isRightClick = e.button === 2;
+            const newColor = isRightClick ? { empty: true } : currentBrush;
+            
+            px.updatePixel(x, y, newColor);
+            currentGridResponse[y][x] = newColor; 
+            updateStats(currentGridResponse);
+        } else {
+            // Default Mode: Move Magnifier
+            if (magState.enabled) {
+                const half = Math.floor(magState.size / 2);
+                magState.x = x - half;
+                magState.y = y - half;
+                updateMagnifier();
+            }
+        }
+    });
+
+    canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+    // --- Stats & Completion ---
+
+    function updateStats(grid) {
+        if (!grid) return;
+        
+        // Remove startBeadBtn check
+        // Always show editor controls when grid is generated
+        document.getElementById('editorControls').style.display = 'block';
+
+        currentCounts = Exporter.countColors(grid);
+        statsTableBody.innerHTML = '';
+        
+        let hasEnoughStock = true;
+        const inventory = StorageService.getInventory();
+        const invMap = {};
+        inventory.forEach(i => invMap[i.hex.toUpperCase()] = i);
+
+        currentCounts.forEach(c => {
+            const hexUpper = c.hex.toUpperCase();
+            let invItem = invMap[hexUpper];
+            let stockStatus = '';
+            
+            const tr = document.createElement('tr');
+            
+            // 1. Color Box
+            const colorTd = document.createElement('td');
+            const colorBox = document.createElement('div');
+            colorBox.style.cssText = `width: 24px; height: 24px; background-color: ${c.hex}; border: 1px solid #ccc; cursor: pointer;`;
+            colorBox.title = "点击吸取颜色";
+            
+            colorBox.onclick = () => {
+                // if (isBeadingMode) { ... } else {
+                    currentBrush = c.rgb;
+                    const brushUI = document.getElementById('currentBrushColor');
+                    if (brushUI) brushUI.style.backgroundColor = c.hex;
+                // }
+            };
+            
+            colorTd.appendChild(colorBox);
+            tr.appendChild(colorTd);
+
+            // 2. Name
+            const nameTd = document.createElement('td');
+            let displayName = invItem ? `${invItem.name} (${invItem.id})` : c.hex;
+            nameTd.innerText = displayName;
+            tr.appendChild(nameTd);
+
+            // 3. Count
+            const countTd = document.createElement('td');
+            countTd.innerText = c.count;
+            tr.appendChild(countTd);
+
+             // 4. Stock
+            const stockTd = document.createElement('td');
+            if (invItem) {
+                const diff = invItem.count - c.count;
+                if (diff < 0) {
+                    stockStatus = `<span class="text-danger">缺 ${Math.abs(diff)}</span>`;
+                    hasEnoughStock = false;
+                } else {
+                    stockStatus = `<span class="text-success">足</span>`;
+                }
+            } else {
+                stockStatus = `<span class="text-muted">-</span>`;
+            }
+            stockTd.innerHTML = stockStatus;
+            tr.appendChild(stockTd);
+
+            statsTableBody.appendChild(tr);
+        });
+
+        completeBtn.disabled = !hasEnoughStock;
+    }
+
+    completeBtn.addEventListener('click', () => {
+        if (!currentCounts || !currentGridResponse) return;
+        if (!confirm("确定要“拼他”吗？这将扣除对应的库存数量并保存到历史记录。")) return;
+
+        const check = StorageService.checkStock(currentCounts);
+        if (!check.valid) {
+            alert("库存不足，无法完成操作！请检查库存。");
+            return;
+        }
+
+        StorageService.deductStock(currentCounts);
+        
+        const record = {
+            title: "拼豆作品 " + new Date().toLocaleString(),
+            imgSrc: canvas.toDataURL(), 
+            beadCount: currentCounts.reduce((sum, c) => sum + c.count, 0),
+            colorsUsed: currentCounts.length
+        };
+        StorageService.addHistory(record);
+
+        renderInventoryTable();
+        renderHistoryList();
+        updateStats(currentGridResponse);
+        alert("🎉 恭喜！作品已保存，库存已更新。");
+    });
+
+    // --- History ---
+
+    function renderHistoryList() {
+        const history = StorageService.getHistory();
+        historyList.innerHTML = '';
+        if (history.length === 0) {
+            historyList.innerHTML = '<div class="col-12 text-center text-muted">暂无历史记录</div>';
+            return;
+        }
+
+        history.forEach(rec => {
+            const div = document.createElement('div');
+            div.className = 'col-md-4 col-sm-6';
+            div.innerHTML = `
+                <div class="card h-100">
+                    <img src="${rec.imgSrc}" class="card-img-top" alt="Thumb" style="image-rendering: pixelated; max-height: 200px; object-fit: contain; background: #eee;">
+                    <div class="card-body">
+                        <h6 class="card-title">${rec.title || '未命名作品'}</h6>
+                        <small class="text-muted">${new Date(rec.timestamp).toLocaleString()}</small>
+                        <ul class="list-unstyled mt-2 small">
+                            <li>消耗豆子: <strong>${rec.beadCount}</strong> 颗</li>
+                            <li>使用颜色: ${rec.colorsUsed} 种</li>
+                        </ul>
+                    </div>
+                </div>
+            `;
+            historyList.appendChild(div);
+        });
+    }
+
+    // --- Exports ---
+    
+    btnPng.addEventListener('click', () => {
+        if (!currentGridResponse) return alert('请先生成图纸');
+        
+        const opts = {
+            showNumbers: chkNumbers.checked,
+            cellSize: 20
+        };
+        const printCanvas = Exporter.generatePrintableCanvas(currentGridResponse, opts);
+        
+        printCanvas.toBlob(blob => {
+            const link = document.createElement('a');
+            link.download = `pixelbeads_design_${Date.now()}.png`;
+            link.href = URL.createObjectURL(blob);
+            link.click();
+        });
+    });
+
+    btnCsv.addEventListener('click', () => {
+        if (!currentGridResponse) return alert('请先生成图纸');
+        Exporter.exportGridCSV(currentGridResponse);
+    });
+
+    btnStats.addEventListener('click', () => {
+        if (!currentCounts) return alert('请先生成图纸');
+        Exporter.exportColorUsageCSV(currentCounts);
+    });
+
+    // Boot
+    init();
+});
