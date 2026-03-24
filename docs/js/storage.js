@@ -176,45 +176,112 @@ const StorageService = {
         return this.history;
     },
 
-    addHistory(record) {
+    async addHistory(record) {
         record.timestamp = new Date().toISOString();
+        
+        // Optimistic update: Temporarily push record without ID
+        // Or wait for ID? Better wait for ID to prevent deletion bugs.
+        // But for UX responsiveness, we can push first.
+        // However, if user deletes immediately, ID is missing.
+        // Let's create a temporary unique ID for frontend-only
+        record._tempId = Date.now() + Math.random(); 
+
         this.history.unshift(record);
+
         if (this.currentUser) {
-            fetch(`${API_BASE}/api/history/${this.currentUser.id}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(record)
-            }).catch(e => console.error("Save history failed", e));
+            try {
+                const res = await fetch(`${API_BASE}/api/history/${this.currentUser.id}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(record)
+                });
+                const data = await res.json();
+                if (data.id) {
+                    record.id = data.id; // Update the referenced object in array
+                    delete record._tempId;
+                }
+            } catch(e) { 
+                console.error("Save history failed", e);
+                // Maybe remove from local history if failed?
+                // For now keep it locally.
+            }
         }
     },
 
-    async deleteHistory(historyId) {
-        if (!this.currentUser) return;
-        
-        const record = this.history.find(h => h.id === historyId);
-        if (!record) return;
+    // --- History Logic Refactored ---
+    
+    // Updated: Accept pre-validated check details to handle stock
+    async deleteHistory(target) {
+        let record = null;
+        let recId = null;
 
-        // 1. Restore Stock (if details exist)
-        if (record.details && Array.isArray(record.details)) {
-            const invMap = {};
-            this.inventory.forEach(i => invMap[i.hex.toUpperCase()] = i);
-            
-            record.details.forEach(d => {
-                const item = invMap[d.hex.toUpperCase()];
-                if (item) {
-                     item.count += d.count;
-                }
-            });
-            this.saveInventory(this.inventory); // Sync restored stock
+        // Support passing either ID or the full object
+        if (typeof target === 'object' && target !== null) {
+            record = target;
+            recId = record.id;
+        } else {
+            recId = target;
+            record = this.history.find(h => h.id === recId);
         }
 
-        // 2. Delete Remote
+        if (!record) return false;
+
         try {
-            await fetch(`${API_BASE}/api/history/${historyId}`, { method: 'DELETE' });
-            this.history = this.history.filter(h => h.id !== historyId);
+            // Delete from server ONLY if it has a real ID
+            if (recId) {
+                const res = await fetch(`${API_BASE}/api/history/${recId}`, {
+                    method: 'DELETE'
+                });
+                
+                if (!res.ok) throw new Error("Delete failed");
+            }
+
+            // Update local state by removing the specific object reference
+            this.history = this.history.filter(h => h !== record);
+            return true;
         } catch (e) {
-            console.error("Delete failed", e);
-            alert("删除失败");
+            console.error(e);
+            alert("删除历史记录失败");
+            return false;
+        }
+    },
+
+    // New: Restore Stock from History Record details
+    async restoreStockFromHistory(record) {
+        if (!record.details || !Array.isArray(record.details)) {
+            console.warn("No details found in history record, cannot restore stock.");
+            return { success: false, reason: "missing_details" };
+        }
+
+        // Must fetch FRESH inventory first to avoid overwriting recent edits
+        try {
+            const invRes = await fetch(`${API_BASE}/api/inventory/${this.currentUser.id}`);
+            const currentInv = await invRes.json();
+            
+            const invMap = {};
+            currentInv.forEach(i => invMap[i.hex.toUpperCase()] = i);
+
+            // Restore
+            let restoredCount = 0;
+            record.details.forEach(detail => {
+                const hex = detail.hex.toUpperCase();
+                if (invMap[hex]) {
+                    invMap[hex].count += detail.count;
+                    restoredCount += detail.count;
+                } else {
+                    console.warn(`Color ${hex} not found in inventory, skipping restore.`);
+                }
+            });
+
+            // Update local state instance
+            this.inventory = currentInv;
+            // Save updated inventory to server
+            await this.saveInventory(this.inventory);
+            
+            return { success: true, restoredCount };
+        } catch(e) {
+            console.error("Failed to fetch fresh inventory for restore", e);
+            throw e; // Network error, should impede deletion
         }
     },
 

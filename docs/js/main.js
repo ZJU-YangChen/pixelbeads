@@ -158,7 +158,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Inventory Management ---
     
     function renderInventoryTable() {
-        const inventory = StorageService.getInventory();
+        // Get inventory and sort by count (ascending)
+        const inventory = StorageService.getInventory().sort((a, b) => a.count - b.count);
         inventoryTableBody.innerHTML = '';
         
         inventory.forEach((item, index) => {
@@ -195,17 +196,34 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             // Save Logic
-            const saveStock = () => {
+            const saveStock = async () => {
                 const newCount = parseInt(input.value);
                 if (!isNaN(newCount) && newCount >= 0) {
                     item.count = newCount;
-                    StorageService.saveInventory(inventory);
-                    valSpan.innerText = newCount;
+                    // Find original item in unsorted array and update it
+                    // Or just save the whole modified inventory list (which works if we don't rely on index)
+                    // But wait, 'inventory' here is the sorted copy.
+                    // StorageService.getInventory() returns a reference to the array usually?
+                    // Let's call StorageService to update specific item logic
+                    
+                    // Actually, let's just update the full list via StorageService
+                    // We need to fetch the LATEST full list from storage first to be safe
+                    const currentInv = StorageService.getInventory();
+                    const target = currentInv.find(i => i.id === item.id);
+                    if(target) {
+                        target.count = newCount;
+                        await StorageService.saveInventory(currentInv);
+                        
+                        // Re-render to update sorting
+                        renderInventoryTable();
+                    }
+                } else {
+                    // Revert UI if invalid
+                    valSpan.classList.remove('d-none');
+                    input.classList.add('d-none');
+                    saveBtn.classList.add('d-none');
+                    deleteBtn.classList.remove('d-none');
                 }
-                valSpan.classList.remove('d-none');
-                input.classList.add('d-none');
-                saveBtn.classList.add('d-none');
-                deleteBtn.classList.remove('d-none');
                 
                 // If Palette is My Inventory, refresh pixelit palette
                 if (paletteSelect.value === 'my_inventory') updatePalette();
@@ -218,7 +236,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
             deleteBtn.addEventListener('click', () => {
                 if(confirm(`确定删除 ${item.name} 吗？`)) {
-                    const newInv = inventory.filter(x => x.id !== item.id);
+                    const currentInv = StorageService.getInventory();
+                    const newInv = currentInv.filter(x => x.id !== item.id);
                     StorageService.saveInventory(newInv);
                     renderInventoryTable();
                     if (paletteSelect.value === 'my_inventory') updatePalette();
@@ -620,7 +639,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const hex = c.toString(16);
             return hex.length === 1 ? '0' + hex : hex;
         };
-        return '#' + toHex(r) + toHex(g) + toHex(b);
+        return ('#' + toHex(r) + toHex(g) + toHex(b)).toUpperCase();
     };
 
     // Canvas Interaction
@@ -765,7 +784,7 @@ document.addEventListener('DOMContentLoaded', () => {
         completeBtn.disabled = !hasEnoughStock;
     }
 
-    completeBtn.addEventListener('click', () => {
+    completeBtn.addEventListener('click', async () => {
         if (!currentCounts || !currentGridResponse) return;
         if (!confirm("确定要“拼他”吗？这将扣除对应的库存数量并保存到历史记录。")) return;
 
@@ -781,9 +800,12 @@ document.addEventListener('DOMContentLoaded', () => {
             title: "拼豆作品 " + new Date().toLocaleString(),
             imgSrc: canvas.toDataURL(), 
             beadCount: currentCounts.reduce((sum, c) => sum + c.count, 0),
-            colorsUsed: currentCounts.length
+            colorsUsed: currentCounts.length,
+            details: currentCounts 
         };
-        StorageService.addHistory(record);
+        
+        // Wait for ID to be generated before rendering
+        await StorageService.addHistory(record);
 
         renderInventoryTable();
         renderHistoryList();
@@ -791,35 +813,89 @@ document.addEventListener('DOMContentLoaded', () => {
         alert("🎉 恭喜！作品已保存，库存已更新。");
     });
 
-    // --- History ---
-
-    function renderHistoryList() {
-        const history = StorageService.getHistory();
+    // --- History Logic Refactored ---
+    const renderHistoryList = () => {
+        // Sort history: newest first
+        const history = StorageService.getHistory().sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
         historyList.innerHTML = '';
         if (history.length === 0) {
             historyList.innerHTML = '<div class="col-12 text-center text-muted">暂无历史记录</div>';
             return;
         }
+        
+        const row = document.createElement('div');
+        row.className = 'row g-3'; // Use bootstrap grid
 
         history.forEach(rec => {
-            const div = document.createElement('div');
-            div.className = 'col-md-4 col-sm-6';
-            div.innerHTML = `
-                <div class="card h-100">
-                    <img src="${rec.imgSrc}" class="card-img-top" alt="Thumb" style="image-rendering: pixelated; max-height: 200px; object-fit: contain; background: #eee;">
-                    <div class="card-body">
-                        <h6 class="card-title">${rec.title || '未命名作品'}</h6>
-                        <small class="text-muted">${new Date(rec.timestamp).toLocaleString()}</small>
-                        <ul class="list-unstyled mt-2 small">
-                            <li>消耗豆子: <strong>${rec.beadCount}</strong> 颗</li>
-                            <li>使用颜色: ${rec.colorsUsed} 种</li>
+            const col = document.createElement('div');
+            col.className = 'col-md-4 col-sm-6'; // Adjust column width
+
+            col.innerHTML = `
+                <div class="card h-100 shadow-sm">
+                    <div style="position: relative;">
+                         <img src="${rec.imgSrc}" class="card-img-top p-2" alt="Thumb" style="image-rendering: pixelated; max-height: 200px; object-fit: contain; background: #eee;">
+                         <span class="badge bg-dark bg-opacity-75 position-absolute top-0 end-0 m-2">${new Date(rec.timestamp).toLocaleDateString()}</span>
+                    </div>
+                    <div class="card-body d-flex flex-column">
+                        <h6 class="card-title fw-bold text-truncate" title="${rec.title}">${rec.title || '未命名作品'}</h6>
+                        <ul class="list-unstyled flex-grow-1 small text-muted mb-3">
+                            <li class="d-flex justify-content-between border-bottom py-1"><span>消耗豆子:</span> <strong>${rec.beadCount} 颗</strong></li>
+                            <li class="d-flex justify-content-between py-1"><span>使用颜色:</span> <strong>${rec.colorsUsed} 种</strong></li>
                         </ul>
+                        <div class="d-grid mt-auto">
+                            <button class="btn btn-outline-danger btn-sm delete-history-btn" data-id="${rec.id}">
+                                🗑️ 删除并撤销库存
+                            </button>
+                        </div>
                     </div>
                 </div>
             `;
-            historyList.appendChild(div);
+            
+            const btn = col.querySelector('.delete-history-btn');
+            btn.addEventListener('click', async () => {
+                if(!confirm(`⚠️ 严重警告：\n\n您确定要删除这条【${rec.title || '未命名'}】记录吗？\n\n操作后果：\n1. 该作品的记录将被永久删除。\n2. 系统将尝试把该作品消耗的豆子【全部退回】到库存中。\n\n请确认：这些豆子确实没有被消耗掉，或者您只是想撤销这次操作。`)) {
+                    return;
+                }
+                
+                // Do deletion sequence
+                try {
+                    // 1. Restore Stock
+                    const stockResult = await StorageService.restoreStockFromHistory(rec);
+                    
+                    if (!stockResult.success) {
+                        if (stockResult.reason === 'missing_details') {
+                            if (!confirm("⚠️ 注意：该历史记录似乎是一个早期生成的数据（缺少详细消耗清单），系统【无法自动回滚】库存。\n\n您是否仍要删除这条历史记录？")) {
+                                return; // User cancelled deletion
+                            }
+                        } else {
+                            alert("库存回滚遭遇未知错误，操作中止。");
+                            return;
+                        }
+                    } else {
+                        // Success restoring
+                        if(stockResult.restoredCount > 0) {
+                             alert(`库存回滚成功！已退回 ${stockResult.restoredCount} 颗豆子。`);
+                        }
+                    }
+
+                    // 2. Delete Record
+                    const success = await StorageService.deleteHistory(rec);
+                    
+                    if (success) {
+                        renderHistoryList(); // Re-render self
+                        renderInventoryTable(); // Refresh inventory tab incase user switches back
+                        // Optionally update stats table if it matches current grid? No need, too complex.
+                    }
+                } catch(err) {
+                    console.error(err);
+                    alert("操作执行过程中发生错误，请刷新页面检查数据。");
+                }
+            });
+            
+            row.appendChild(col);
         });
-    }
+        historyList.appendChild(row);
+    };
 
     // --- Exports ---
     

@@ -190,7 +190,7 @@ app.post('/api/history/:userId', async (req, res) => {
     const userId = req.params.userId;
     const record = req.body;
     try {
-        await db.query(
+        const [result] = await db.query(
             'INSERT INTO history (user_id, title, img_src, bead_count, colors_used, details, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?)',
             [
                 userId, 
@@ -202,7 +202,7 @@ app.post('/api/history/:userId', async (req, res) => {
                 new Date(record.timestamp || Date.now())
             ]
         );
-        res.json({ success: true });
+        res.json({ success: true, id: result.insertId });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
