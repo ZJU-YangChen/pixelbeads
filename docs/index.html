@@ -849,14 +849,27 @@
                             </form>
                         </div>
                         <div class="tab-pane fade" id="register-pane">
+                            <div class="alert py-2 small mb-3" style="background:#fff8ec; border:1px solid #f5c97a; border-left:3px solid #f0ad4e; color:#856404; border-radius:8px;">
+                                ⚠️ <strong>请务必牢记您的密码！</strong><br>
+                                本产品目前<strong>不支持密码找回</strong>，忘记密码将无法登录。
+                            </div>
                             <form id="registerForm">
                                 <div class="mb-3">
-                                    <label class="form-label">新用户名</label>
-                                    <input type="text" class="form-control" name="username" required>
+                                    <label class="form-label">用户名</label>
+                                    <input type="text" class="form-control" name="username" required
+                                           minlength="3" maxlength="20" placeholder="3-20 位，例如 yangchen_01">
+                                    <div class="form-text small">仅支持 <strong>英文字母、数字、下划线</strong>，长度 3-20 位。</div>
                                 </div>
                                 <div class="mb-3">
-                                    <label class="form-label">新密码</label>
-                                    <input type="password" class="form-control" name="password" required>
+                                    <label class="form-label">密码</label>
+                                    <input type="password" class="form-control" name="password" required
+                                           minlength="6" placeholder="至少 6 位">
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">确认密码</label>
+                                    <input type="password" class="form-control" id="confirmPassword" required
+                                           placeholder="再次输入密码">
+                                    <div class="form-text small text-danger d-none" id="confirmPwdHint">两次密码不一致</div>
                                 </div>
                                 <div class="alert alert-danger d-none" id="registerError"></div>
                                 <button type="submit" class="btn btn-success w-100">注册并登录</button>

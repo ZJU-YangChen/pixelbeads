@@ -84,6 +84,17 @@ document.addEventListener('DOMContentLoaded', () => {
     registerForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const formData = new FormData(e.target);
+        const confirmPwd = document.getElementById('confirmPassword').value;
+        const confirmHint = document.getElementById('confirmPwdHint');
+        const errorEl = document.getElementById('registerError');
+        errorEl.classList.add('d-none');
+
+        if (formData.get('password') !== confirmPwd) {
+            confirmHint.classList.remove('d-none');
+            return;
+        }
+        confirmHint.classList.add('d-none');
+
         try {
             const user = await StorageService.register(
                 formData.get('username'),
@@ -92,9 +103,8 @@ document.addEventListener('DOMContentLoaded', () => {
             track('user_register');
             handleLoginSuccess(user);
         } catch (err) {
-            const alert = document.getElementById('registerError');
-            alert.innerText = err.message;
-            alert.classList.remove('d-none');
+            errorEl.innerText = err.message;
+            errorEl.classList.remove('d-none');
         }
     });
 
