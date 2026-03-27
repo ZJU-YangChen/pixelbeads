@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PixelBeads 数据后台</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        :root {
+            --mo-bg: #eae6e1;
+            --mo-primary: #7a9e98;
+            --mo-primary-dark: #5d8880;
+            --mo-success: #8aab9a;
+            --mo-accent: #d4a09c;
+            --mo-secondary: #b0a8b4;
+        }
+        body {
+            background-color: var(--mo-bg);
+            background-image: radial-gradient(ellipse at 10% 90%, rgba(122,158,152,0.14) 0%, transparent 52%),
+                              radial-gradient(ellipse at 90% 10%, rgba(212,160,156,0.11) 0%, transparent 52%);
+            font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+            color: #3a3530;
+            min-height: 100vh;
+        }
+        .navbar {
+            background: linear-gradient(160deg, #8aafa8 0%, #5f8e88 100%);
+            box-shadow: 0 2px 24px rgba(60,105,98,0.22);
+            padding: 11px 0;
+        }
+        .login-wrap {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .login-card {
+            background: white;
+            border-radius: 16px;
+            padding: 40px 36px;
+            box-shadow: 0 6px 28px rgba(60,90,85,0.13);
+            width: 100%;
+            max-width: 360px;
+        }
+        .stat-card {
+            background: white;
+            border-radius: 16px;
+            padding: 22px 18px;
+            box-shadow: 0 2px 16px rgba(60,90,85,0.08);
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 2.4rem;
+            font-weight: 700;
+            line-height: 1.1;
+        }
+        .stat-label { color: #909090; font-size: 0.82rem; margin-top: 4px; }
+        .stat-sub { font-size: 0.78rem; color: #bbb; margin-top: 2px; }
+        .chart-card {
+            background: white;
+            border-radius: 16px;
+            padding: 22px;
+            box-shadow: 0 2px 16px rgba(60,90,85,0.08);
+            margin-bottom: 20px;
+        }
+        .chart-title {
+            font-weight: 600;
+            color: var(--mo-primary-dark);
+            font-size: 0.9rem;
+            margin-bottom: 16px;
+            letter-spacing: 0.02em;
+        }
+        .funnel-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 10px;
+        }
+        .funnel-label { width: 76px; text-align: right; font-size: 0.78rem; color: #888; flex-shrink: 0; }
+        .funnel-bar-wrap { flex: 1; }
+        .funnel-bar {
+            height: 32px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            padding: 0 12px;
+            color: white;
+            font-weight: 600;
+            font-size: 0.82rem;
+            transition: width 1.2s cubic-bezier(0.22, 1, 0.36, 1);
+            min-width: 52px;
+        }
+        .funnel-rate { width: 44px; font-size: 0.78rem; color: #aaa; flex-shrink: 0; }
+        .kpi-badge {
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 20px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            margin-left: 6px;
+        }
+        .kpi-ok { background: rgba(138,171,154,0.18); color: var(--mo-success); }
+        .kpi-warn { background: rgba(212,160,156,0.18); color: var(--mo-accent); }
+    </style>
+</head>
+<body>
+
+<!-- 登录界面 -->
+<div id="loginWrap" class="login-wrap">
+    <div class="login-card text-center">
+        <div style="font-size: 2.5rem; margin-bottom: 10px;">📊</div>
+        <h5 class="fw-bold mb-1">PixelBeads 数据后台</h5>
+        <p class="text-muted small mb-4">请输入管理员密码</p>
+        <input type="password" id="pwdInput" class="form-control text-center mb-2" placeholder="密码" autofocus>
+        <div class="alert alert-danger d-none py-2 small" id="pwdError">密码错误，请重试</div>
+        <button class="btn btn-primary w-100 mt-1" id="loginBtn">进入后台</button>
+    </div>
+</div>
+
+<!-- 数据后台 -->
+<div id="dashWrap" style="display:none;">
+    <nav class="navbar navbar-dark mb-4">
+        <div class="container-fluid px-4">
+            <span class="navbar-brand fw-bold">📊 PixelBeads 数据后台</span>
+            <div class="d-flex align-items-center gap-3">
+                <span class="text-light small opacity-75" id="updateTime"></span>
+                <button class="btn btn-sm btn-outline-light" id="refreshBtn">↺ 刷新</button>
+                <a href="/" class="btn btn-sm btn-outline-light">← 返回应用</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid px-4 pb-5">
+
+        <!-- 核心指标 -->
+        <div class="row g-3 mb-4" id="metricsRow"></div>
+
+        <!-- 漏斗 + 日活 -->
+        <div class="row g-3 mb-2">
+            <div class="col-lg-5">
+                <div class="chart-card h-100">
+                    <div class="chart-title">🔽 核心转化漏斗</div>
+                    <div id="funnelChart"></div>
+                    <div class="mt-3 pt-2 border-top">
+                        <small class="text-muted">激活率 = 生成图纸 / 上传图片；转化率 = 导出或完成 / 上传图片</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-7">
+                <div class="chart-card h-100">
+                    <div class="chart-title">📈 近14天活跃度</div>
+                    <canvas id="dailyChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- 功能使用 + AI调色 -->
+        <div class="row g-3">
+            <div class="col-lg-5">
+                <div class="chart-card">
+                    <div class="chart-title">🧩 功能使用分布</div>
+                    <canvas id="eventChart" height="220"></canvas>
+                </div>
+            </div>
+            <div class="col-lg-7">
+                <div class="chart-card">
+                    <div class="chart-title">✨ AI 调色详情</div>
+                    <div class="row g-3 text-center mb-3" id="aiMetrics"></div>
+                    <canvas id="aiStyleChart" height="100"></canvas>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+    const MO = {
+        primary:     '#7a9e98',
+        primaryDark: '#5d8880',
+        primaryLight:'#a0beba',
+        success:     '#8aab9a',
+        accent:      '#d4a09c',
+        accentDark:  '#bc8783',
+        secondary:   '#b0a8b4',
+        warm:        '#c8a87a'
+    };
+
+    let savedPwd = '';
+
+    // --- 登录 ---
+    document.getElementById('loginBtn').addEventListener('click', tryLogin);
+    document.getElementById('pwdInput').addEventListener('keypress', e => { if (e.key === 'Enter') tryLogin(); });
+
+    async function tryLogin() {
+        savedPwd = document.getElementById('pwdInput').value.trim();
+        const ok = await loadDash(savedPwd);
+        if (!ok) {
+            document.getElementById('pwdError').classList.remove('d-none');
+            document.getElementById('pwdInput').select();
+        }
+    }
+
+    document.getElementById('refreshBtn').addEventListener('click', () => loadDash(savedPwd));
+
+    async function loadDash(pwd) {
+        try {
+            const resp = await fetch(`/api/admin/stats?pwd=${encodeURIComponent(pwd)}`);
+            if (!resp.ok) return false;
+            const data = await resp.json();
+            document.getElementById('loginWrap').style.display = 'none';
+            document.getElementById('dashWrap').style.display = 'block';
+            document.getElementById('updateTime').textContent = '更新于 ' + new Date().toLocaleString('zh-CN');
+            renderDashboard(data);
+            return true;
+        } catch (e) {
+            return false;
+        }
+    }
+
+    // --- 渲染 ---
+    let dailyChartInst, eventChartInst, aiStyleChartInst;
+
+    function renderDashboard(data) {
+        const ev = data.events || {};
+        const uploaded    = ev.image_uploaded        || 0;
+        const generated   = ev.grid_generated        || 0;
+        const exportPng   = ev.export_png            || 0;
+        const exportCsv   = ev.export_csv            || 0;
+        const completed   = ev.complete_bead         || 0;
+        const converted   = exportPng + exportCsv + completed;
+        const aiStart     = ev.ai_colorize_start     || 0;
+        const aiAccept    = ev.ai_colorize_accept    || 0;
+        const aiReject    = ev.ai_colorize_reject    || 0;
+        const aiTotal     = aiAccept + aiReject;
+        const aiRate      = aiTotal > 0 ? Math.round(aiAccept / aiTotal * 100) : 0;
+        const activateRate= uploaded > 0 ? Math.round(generated / uploaded * 100) : 0;
+        const convertRate = uploaded > 0 ? Math.round(converted / uploaded * 100) : 0;
+
+        // 验收指标 KPI 目标（推广后2周）
+        const KPI = { users: 30, activate: 50, exportPng: 20, aiUsage: 20 };
+        const aiUsagePct  = generated > 0 ? Math.round(aiStart / generated * 100) : 0;
+
+        // --- 指标卡 ---
+        const metrics = [
+            { value: data.users.total, label: '注册用户', sub: `今日 +${data.users.today} / 本周 +${data.users.week}`,
+              color: MO.primary, kpi: data.users.total >= KPI.users ? 'ok' : 'warn', kpiLabel: `目标 ${KPI.users}` },
+            { value: `${activateRate}%`, label: '激活率', sub: '完成生成/上传图片',
+              color: MO.success, kpi: activateRate >= KPI.activate ? 'ok' : 'warn', kpiLabel: `目标 ${KPI.activate}%` },
+            { value: exportPng, label: 'PNG 导出', sub: '次',
+              color: MO.primaryDark, kpi: exportPng >= KPI.exportPng ? 'ok' : 'warn', kpiLabel: `目标 ${KPI.exportPng}` },
+            { value: `${aiUsagePct}%`, label: 'AI调色使用率', sub: '使用过/生成过',
+              color: MO.accent, kpi: aiUsagePct >= KPI.aiUsage ? 'ok' : 'warn', kpiLabel: `目标 ${KPI.aiUsage}%` },
+            { value: generated, label: '图纸生成', sub: '次', color: MO.warm },
+            { value: completed, label: '完成拼豆', sub: '次', color: MO.secondary },
+        ];
+        document.getElementById('metricsRow').innerHTML = metrics.map(m => `
+            <div class="col-6 col-md-4 col-lg-2">
+                <div class="stat-card">
+                    <div class="stat-value" style="color:${m.color}">${m.value}</div>
+                    <div class="stat-label">${m.label}
+                        ${m.kpi ? `<span class="kpi-badge kpi-${m.kpi}">${m.kpiLabel}</span>` : ''}
+                    </div>
+                    <div class="stat-sub">${m.sub}</div>
+                </div>
+            </div>
+        `).join('');
+
+        // --- 漏斗 ---
+        const funnel = [
+            { label: '上传图片', count: uploaded,  color: MO.primary },
+            { label: '生成图纸', count: generated, color: MO.success },
+            { label: 'AI 调色', count: aiStart,   color: MO.primaryLight },
+            { label: '导出/完成', count: converted, color: MO.accent },
+        ];
+        const maxF = Math.max(...funnel.map(f => f.count), 1);
+        document.getElementById('funnelChart').innerHTML = funnel.map(f => {
+            const pct = Math.max(Math.round(f.count / maxF * 100), f.count > 0 ? 8 : 0);
+            const rate = funnel[0].count > 0 ? Math.round(f.count / funnel[0].count * 100) : 0;
+            return `
+                <div class="funnel-row">
+                    <div class="funnel-label">${f.label}</div>
+                    <div class="funnel-bar-wrap">
+                        <div class="funnel-bar" style="width:${pct}%; background:${f.color};">${f.count}</div>
+                    </div>
+                    <div class="funnel-rate">${rate}%</div>
+                </div>`;
+        }).join('');
+
+        // --- 日活折线图 ---
+        const last14 = getLast14Days();
+        const evMap = Object.fromEntries((data.daily_events || []).map(d => [d.date?.slice(0,10) || d.date, Number(d.count)]));
+        const usMap = Object.fromEntries((data.daily_users  || []).map(d => [d.date?.slice(0,10) || d.date, Number(d.count)]));
+
+        if (dailyChartInst) dailyChartInst.destroy();
+        dailyChartInst = new Chart(document.getElementById('dailyChart'), {
+            type: 'line',
+            data: {
+                labels: last14.map(d => d.slice(5)),
+                datasets: [
+                    { label: '事件数', data: last14.map(d => evMap[d] || 0),
+                      borderColor: MO.primary, backgroundColor: MO.primary + '22', fill: true, tension: 0.4, pointRadius: 3 },
+                    { label: '新注册', data: last14.map(d => usMap[d] || 0),
+                      borderColor: MO.accent, backgroundColor: 'transparent', borderDash: [4,4], tension: 0.4, pointRadius: 3 }
+                ]
+            },
+            options: {
+                plugins: { legend: { position: 'top', labels: { font: { size: 11 } } } },
+                scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+            }
+        });
+
+        // --- 功能使用甜甜圈 ---
+        const dKeys   = ['image_uploaded','grid_generated','ai_colorize_start','ai_colorize_accept','ai_colorize_reject','export_png','export_csv','complete_bead'];
+        const dLabels = ['上传图片','生成图纸','AI调色发起','AI接受','AI放弃','导出PNG','导出CSV','完成拼豆'];
+        const dColors = [MO.primary, MO.success, MO.primaryLight, '#9fccbe', MO.secondary, MO.accent, MO.accentDark, MO.warm];
+
+        if (eventChartInst) eventChartInst.destroy();
+        eventChartInst = new Chart(document.getElementById('eventChart'), {
+            type: 'doughnut',
+            data: {
+                labels: dLabels,
+                datasets: [{ data: dKeys.map(k => ev[k] || 0), backgroundColor: dColors }]
+            },
+            options: {
+                plugins: { legend: { position: 'bottom', labels: { font: { size: 10 }, padding: 8, boxWidth: 12 } } },
+                cutout: '60%'
+            }
+        });
+
+        // --- AI 调色指标 ---
+        document.getElementById('aiMetrics').innerHTML = [
+            { value: aiStart, label: '发起次数', color: MO.primary },
+            { value: aiAccept, label: '接受次数', color: MO.success },
+            { value: aiReject, label: '放弃次数', color: MO.secondary },
+            { value: `${aiRate}%`, label: '接受率', color: aiRate >= 50 ? MO.success : MO.accent },
+        ].map(m => `
+            <div class="col-6 col-sm-3">
+                <div class="fw-bold fs-4" style="color:${m.color}">${m.value}</div>
+                <div class="text-muted small">${m.label}</div>
+            </div>
+        `).join('');
+
+        // AI 风格条形图（从 properties 无法直接聚合，先用 start 总数占位）
+        const styleLabels = ['极简拼豆','标准图纸','细腻还原','卡通硬边','柔和渐变'];
+        const styleColors = [MO.primary, MO.success, MO.primaryLight, MO.accent, MO.secondary];
+        if (aiStyleChartInst) aiStyleChartInst.destroy();
+        aiStyleChartInst = new Chart(document.getElementById('aiStyleChart'), {
+            type: 'bar',
+            data: {
+                labels: styleLabels,
+                datasets: [{
+                    label: 'AI调色发起（各风格，需后续精细化埋点）',
+                    data: [
+                        ev['ai_colorize_style_simple']   || 0,
+                        ev['ai_colorize_style_standard'] || 0,
+                        ev['ai_colorize_style_detailed'] || 0,
+                        ev['ai_colorize_style_cartoon']  || 0,
+                        ev['ai_colorize_style_gradient'] || 0,
+                    ],
+                    backgroundColor: styleColors
+                }]
+            },
+            options: {
+                plugins: { legend: { display: false } },
+                scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+            }
+        });
+    }
+
+    function getLast14Days() {
+        const days = [];
+        for (let i = 13; i >= 0; i--) {
+            const d = new Date();
+            d.setDate(d.getDate() - i);
+            days.push(d.toISOString().slice(0, 10));
+        }
+        return days;
+    }
+</script>
+</body>
+</html>

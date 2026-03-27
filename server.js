@@ -357,6 +357,62 @@ app.post('/api/ai/colorize', async (req, res) => {
     }
 });
 
+// --- Events API ---
+
+app.post('/api/events', async (req, res) => {
+    const { event, userId, properties } = req.body;
+    if (!event) return res.status(400).json({ error: 'Missing event name' });
+    try {
+        await db.query(
+            'INSERT INTO events (user_id, event_name, properties) VALUES (?, ?, ?)',
+            [userId || null, event, JSON.stringify(properties || {})]
+        );
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// --- Admin Stats ---
+
+const ADMIN_PWD = process.env.ADMIN_PWD || 'yangchen1215';
+
+app.get('/api/admin/stats', async (req, res) => {
+    if (req.query.pwd !== ADMIN_PWD) {
+        return res.status(401).json({ error: '密码错误' });
+    }
+    try {
+        const [[{ total_users }]] = await db.query('SELECT COUNT(*) as total_users FROM users');
+        const [[{ today_users }]] = await db.query('SELECT COUNT(*) as today_users FROM users WHERE DATE(created_at) = CURDATE()');
+        const [[{ week_users }]] = await db.query("SELECT COUNT(*) as week_users FROM users WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)");
+
+        const [eventCounts] = await db.query(
+            'SELECT event_name, COUNT(*) as count FROM events GROUP BY event_name ORDER BY count DESC'
+        );
+
+        const [dailyEvents] = await db.query(
+            `SELECT DATE(created_at) as date, COUNT(*) as count FROM events
+             WHERE created_at >= DATE_SUB(NOW(), INTERVAL 14 DAY)
+             GROUP BY DATE(created_at) ORDER BY date`
+        );
+
+        const [dailyUsers] = await db.query(
+            `SELECT DATE(created_at) as date, COUNT(*) as count FROM users
+             WHERE created_at >= DATE_SUB(NOW(), INTERVAL 14 DAY)
+             GROUP BY DATE(created_at) ORDER BY date`
+        );
+
+        res.json({
+            users: { total: total_users, today: today_users, week: week_users },
+            events: Object.fromEntries(eventCounts.map(r => [r.event_name, Number(r.count)])),
+            daily_events: dailyEvents,
+            daily_users: dailyUsers
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);

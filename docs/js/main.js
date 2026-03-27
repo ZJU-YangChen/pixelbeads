@@ -59,6 +59,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Auth Logic
     const handleLoginSuccess = (user) => {
         loginModal.hide();
+        currentUserId = user.id;
         userDisplay.innerText = `👤 ${user.username}`;
         logoutBtn.style.display = 'block';
         init(); // Start App
@@ -88,6 +89,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 formData.get('username'),
                 formData.get('password')
             );
+            track('user_register');
             handleLoginSuccess(user);
         } catch (err) {
             const alert = document.getElementById('registerError');
@@ -185,6 +187,19 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentGridResponse = null;
     let originalGridResponse = null; // Store original for reset
     let currentCounts = null; // Store count result
+    let currentUserId = null;
+
+    // --- Analytics ---
+    function track(eventName, properties = {}) {
+        if (typeof gtag === 'function') {
+            gtag('event', eventName, properties);
+        }
+        fetch('/api/events', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ event: eventName, userId: currentUserId, properties })
+        }).catch(() => {});
+    }
 
 
     // Default Palettes
@@ -372,6 +387,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (previewArea)  previewArea.style.display = 'block';
                 if (previewInfo)  previewInfo.textContent   = file.name;
                 if (uploadIcon)   uploadIcon.textContent    = '✅';
+                track('image_uploaded');
                 activateStep(2);
             };
         };
@@ -452,6 +468,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             activateStep(3);
             updateStats(currentGridResponse);
+            track('grid_generated', { size: targetSize, palette: paletteSelect.value });
 
             // 恢复按钮
             generateBtn.classList.remove('btn-generating');
@@ -986,7 +1003,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     completeBtn.addEventListener('click', async () => {
         if (!currentCounts || !currentGridResponse) return;
-        if (!confirm("确定要“拼他”吗？这将扣除对应的库存数量并保存到历史记录。")) return;
+        if (!confirm(“确定要”拼他”吗？这将扣除对应的库存数量并保存到历史记录。”)) return;
+        track('complete_bead');
 
         const check = StorageService.checkStock(currentCounts);
         if (!check.valid) {
@@ -1101,6 +1119,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     btnPng.addEventListener('click', () => {
         if (!currentGridResponse) return alert('请先生成图纸');
+        track('export_png');
         
         const opts = {
             showNumbers: chkNumbers.checked,
@@ -1202,6 +1221,7 @@ document.addEventListener('DOMContentLoaded', () => {
             aiColorizeBtn.disabled = true;
             aiResultArea.style.display = 'none';
             pendingAiGrid = null;
+            track('ai_colorize_start', { style: selectedAiStyle });
 
             try {
                 const imageBase64 = canvas.toDataURL('image/png');
@@ -1252,6 +1272,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (aiAcceptBtn) {
         aiAcceptBtn.addEventListener('click', () => {
             if (!pendingAiGrid) return;
+            track('ai_colorize_accept');
             currentGridResponse = pendingAiGrid;
             pendingAiGrid = null;
             px.drawGrid(currentGridResponse);
@@ -1262,6 +1283,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (aiRejectBtn) {
         aiRejectBtn.addEventListener('click', () => {
+            track('ai_colorize_reject');
             pendingAiGrid = null;
             aiResultArea.style.display = 'none';
         });

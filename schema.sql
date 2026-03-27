@@ -28,3 +28,13 @@ CREATE TABLE IF NOT EXISTS history (
     timestamp DATETIME,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS events (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT,
+    event_name VARCHAR(64) NOT NULL,
+    properties JSON,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_event_name (event_name),
+    INDEX idx_created_at (created_at)
+);
