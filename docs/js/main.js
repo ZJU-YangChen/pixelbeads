@@ -36,6 +36,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnStats = document.getElementById('downloadStats');
     const chkNumbers = document.getElementById('showNumbers');
 
+    // Elements - Steps & Drawers
+    const stepCards    = [null, 'step1Card','step2Card','step3Card','step4Card'].map(id => id ? document.getElementById(id) : null);
+    const stepItemEls  = [null, 'stepItem1','stepItem2','stepItem3','stepItem4'].map(id => id ? document.getElementById(id) : null);
+    const stepLineEls  = [null, 'stepLine1','stepLine2','stepLine3'].map(id => id ? document.getElementById(id) : null);
+    const uploadZone   = document.getElementById('uploadZone');
+    const uploadIcon   = document.getElementById('uploadIcon');
+    const previewArea  = document.getElementById('previewArea');
+    const previewInfo  = document.getElementById('previewInfo');
+    const drawerOverlay    = document.getElementById('drawerOverlay');
+    const inventoryDrawer  = document.getElementById('inventoryDrawer');
+    const historyDrawer    = document.getElementById('historyDrawer');
+
     // Elements - Auth
     const loginModalEl = document.getElementById('loginModal');
     const loginModal = new bootstrap.Modal(loginModalEl);
@@ -87,6 +99,77 @@ document.addEventListener('DOMContentLoaded', () => {
     logoutBtn.addEventListener('click', () => {
         StorageService.logout();
     });
+
+    // --- Step Management ---
+    let currentStep = 1;
+    const stepNumLabels = ['1','2','3','4'];
+
+    function activateStep(n) {
+        for (let i = 1; i <= 4; i++) {
+            const card = stepCards[i];
+            const item = stepItemEls[i];
+            if (!card || !item) continue;
+            const dot = item.querySelector('.step-dot');
+
+            card.classList.remove('active', 'locked', 'done', 'slide-in');
+            item.classList.remove('active', 'done', 'locked');
+
+            if (i < n) {
+                item.classList.add('done');
+                card.classList.add('done');
+                if (dot) {
+                    dot.textContent = '✓';
+                    if (n > currentStep) { dot.classList.remove('dot-pop'); void dot.offsetWidth; dot.classList.add('dot-pop'); }
+                }
+                if (stepLineEls[i]) stepLineEls[i].classList.add('done');
+            } else if (i === n) {
+                item.classList.add('active');
+                card.classList.add('active');
+                if (dot) dot.textContent = stepNumLabels[i - 1];
+                if (n > currentStep) {
+                    requestAnimationFrame(() => card.classList.add('slide-in'));
+                    setTimeout(() => card.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 60);
+                    // dot 弹跳
+                    if (dot) { dot.classList.remove('dot-pop'); void dot.offsetWidth; dot.classList.add('dot-pop'); }
+                }
+            } else {
+                card.classList.add('locked');
+                item.classList.add('locked');
+                if (dot) dot.textContent = stepNumLabels[i - 1];
+                if (stepLineEls[i]) stepLineEls[i].classList.remove('done');
+            }
+        }
+        currentStep = n;
+    }
+
+    // --- Drawer Management ---
+    function openDrawer(drawer) {
+        drawer.classList.add('open');
+        drawerOverlay.classList.add('show');
+    }
+    function closeAllDrawers() {
+        if (inventoryDrawer) inventoryDrawer.classList.remove('open');
+        if (historyDrawer)   historyDrawer.classList.remove('open');
+        if (drawerOverlay)   drawerOverlay.classList.remove('show');
+    }
+
+    const openInvBtn  = document.getElementById('openInventoryDrawer');
+    const openHisBtn  = document.getElementById('openHistoryDrawer');
+    const closeInvBtn = document.getElementById('closeInventoryDrawer');
+    const closeHisBtn = document.getElementById('closeHistoryDrawer');
+    const reuploadBtn = document.getElementById('reuploadBtn');
+
+    if (openInvBtn)  openInvBtn.addEventListener('click', () => openDrawer(inventoryDrawer));
+    if (openHisBtn)  openHisBtn.addEventListener('click', () => openDrawer(historyDrawer));
+    if (closeInvBtn) closeInvBtn.addEventListener('click', closeAllDrawers);
+    if (closeHisBtn) closeHisBtn.addEventListener('click', closeAllDrawers);
+    if (drawerOverlay) drawerOverlay.addEventListener('click', closeAllDrawers);
+    if (reuploadBtn) {
+        reuploadBtn.addEventListener('click', () => {
+            fileInput.value = '';
+            fileInput.click();
+        });
+    }
 
     // State
     let px = new pixelit({
@@ -285,10 +368,36 @@ document.addEventListener('DOMContentLoaded', () => {
             sourceImage.src = event.target.result;
             sourceImage.onload = () => {
                 sourceImage.style.display = 'block';
+                // Show preview & activate step 2
+                if (previewArea)  previewArea.style.display = 'block';
+                if (previewInfo)  previewInfo.textContent   = file.name;
+                if (uploadIcon)   uploadIcon.textContent    = '✅';
+                activateStep(2);
             };
         };
         reader.readAsDataURL(file);
     });
+
+    // Upload zone: click-to-open + drag-and-drop
+    if (uploadZone) {
+        uploadZone.addEventListener('click', () => fileInput.click());
+        uploadZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadZone.classList.add('drag-over');
+        });
+        uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
+        uploadZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadZone.classList.remove('drag-over');
+            const file = e.dataTransfer.files[0];
+            if (file && file.type.startsWith('image/')) {
+                const dt = new DataTransfer();
+                dt.items.add(file);
+                fileInput.files = dt.files;
+                fileInput.dispatchEvent(new Event('change'));
+            }
+        });
+    }
 
     scaleInput.addEventListener('input', (e) => {
         const val = e.target.value;
@@ -309,36 +418,45 @@ document.addEventListener('DOMContentLoaded', () => {
     paletteSelect.addEventListener('change', updatePalette);
 
     generateBtn.addEventListener('click', () => {
-        if (!sourceImage.src) {
+        if (!sourceImage.src || !sourceImage.naturalWidth) {
             alert('请先上传图片');
             return;
         }
-        
-        // 1. Get Target Size (Max Dimension)
-        const targetSize = parseInt(scaleNumInput.value) || 50;
 
-        // 2. Configure PixelIt to resize source to target resolution
-        // Set scale to 1 (1:1 mapping from resized source to grid)
-        px.setScale(1)
-          .setMaxWidth(targetSize)
-          .setMaxHeight(targetSize);
+        // 显示 loading 状态
+        const originalHTML = generateBtn.innerHTML;
+        generateBtn.classList.add('btn-generating');
+        generateBtn.innerHTML = '<span class="btn-spinner"></span>生成中...';
 
-        // 3. Generate Grid (this will resize internal canvas to targetSize x H)
-        px.pixelate({ returnGrid: true });
-        currentGridResponse = px.getGrid();
-        originalGridResponse = JSON.parse(JSON.stringify(currentGridResponse));
-        
-        // 4. Re-draw for Display (Upscale)
-        // We want the visual canvas to be large enough (e.g. max 800px wide)
-        // Heuristic: visual pixel size
-        let visualScale = Math.floor(800 / targetSize);
-        if (visualScale < 1) visualScale = 1; // At least 1px
-        if (visualScale > 20) visualScale = 20; // Cap at 20px per block
+        setTimeout(() => {
+            // 1. Get Target Size (Max Dimension)
+            const targetSize = parseInt(scaleNumInput.value) || 50;
 
-        px.setScale(visualScale);
-        px.drawGrid(currentGridResponse);
-        
-        updateStats(currentGridResponse);
+            // 2. Configure PixelIt to resize source to target resolution
+            px.setScale(1)
+              .setMaxWidth(targetSize)
+              .setMaxHeight(targetSize);
+
+            // 3. Generate Grid
+            px.pixelate({ returnGrid: true });
+            currentGridResponse = px.getGrid();
+            originalGridResponse = JSON.parse(JSON.stringify(currentGridResponse));
+
+            // 4. Re-draw for Display (Upscale)
+            let visualScale = Math.floor(800 / targetSize);
+            if (visualScale < 1) visualScale = 1;
+            if (visualScale > 20) visualScale = 20;
+
+            px.setScale(visualScale);
+            px.drawGrid(currentGridResponse);
+
+            activateStep(3);
+            updateStats(currentGridResponse);
+
+            // 恢复按钮
+            generateBtn.classList.remove('btn-generating');
+            generateBtn.innerHTML = originalHTML;
+        }, 60);
     });
 
 
@@ -703,6 +821,14 @@ document.addEventListener('DOMContentLoaded', () => {
         // Remove startBeadBtn check
         // Always show editor controls when grid is generated
         document.getElementById('editorControls').style.display = 'block';
+        // 显示 AI 调色卡片，重置上次结果
+        const aiCard = document.getElementById('aiColorCard');
+        if (aiCard) {
+            aiCard.style.display = 'block';
+            const resultArea = document.getElementById('aiResultArea');
+            if (resultArea) resultArea.style.display = 'none';
+            pendingAiGrid = null;
+        }
 
         currentCounts = Exporter.countColors(grid);
         statsTableBody.innerHTML = '';
@@ -781,7 +907,14 @@ document.addEventListener('DOMContentLoaded', () => {
             statsTableBody.appendChild(tr);
         });
 
+        // 统计行错开入场
+        statsTableBody.querySelectorAll('tr').forEach((row, i) => {
+            row.classList.add('stat-row-anim');
+            row.style.animationDelay = `${i * 45}ms`;
+        });
+
         completeBtn.disabled = !hasEnoughStock;
+        if (hasEnoughStock) activateStep(4);
     }
 
     completeBtn.addEventListener('click', async () => {
@@ -926,7 +1059,148 @@ document.addEventListener('DOMContentLoaded', () => {
         Exporter.exportColorUsageCSV(currentCounts);
     });
 
+    // --- AI 调色 ---
+
+    const aiColorCard      = document.getElementById('aiColorCard');
+    const aiColorizeBtn    = document.getElementById('aiColorizeBtn');
+    const aiResultArea     = document.getElementById('aiResultArea');
+    const aiReasonText     = document.getElementById('aiReasonText');
+    const aiBeforeCanvas   = document.getElementById('aiBeforeCanvas');
+    const aiAfterCanvas    = document.getElementById('aiAfterCanvas');
+    const aiAcceptBtn      = document.getElementById('aiAcceptBtn');
+    const aiRejectBtn      = document.getElementById('aiRejectBtn');
+
+    let pendingAiGrid = null;
+    let selectedAiStyle = 'simple';
+
+    // 风格按钮切换
+    document.querySelectorAll('.ai-style-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.ai-style-btn').forEach(b => {
+                b.classList.remove('active-style');
+                b.style.border = '1px solid #ccc';
+                b.style.color = 'var(--mo-text)';
+                b.style.background = '';
+            });
+            btn.classList.add('active-style');
+            btn.style.border = '';
+            btn.style.color = '';
+            selectedAiStyle = btn.dataset.style;
+        });
+    });
+
+    // 渲染小尺寸对比预览 canvas（不含坐标标签）
+    function renderPreviewCanvas(targetCanvas, grid) {
+        const cols = grid[0].length;
+        const rows = grid.length;
+        const maxW = 220;
+        const scale = Math.max(1, Math.floor(maxW / cols));
+        targetCanvas.width  = cols * scale;
+        targetCanvas.height = rows * scale;
+        const ctx = targetCanvas.getContext('2d');
+        ctx.clearRect(0, 0, targetCanvas.width, targetCanvas.height);
+        for (let y = 0; y < rows; y++) {
+            for (let x = 0; x < cols; x++) {
+                const p = grid[y][x];
+                if (p && !p.empty) {
+                    ctx.fillStyle = p.hex || rgbToHex(p.r, p.g, p.b);
+                    ctx.fillRect(x * scale, y * scale, scale, scale);
+                }
+            }
+        }
+    }
+
+    // 按替换表生成新 grid（deep copy + 替换）
+    function applyColorReplacements(grid, replacements) {
+        return grid.map(row => row.map(pixel => {
+            if (!pixel || pixel.empty) return pixel ? { ...pixel } : pixel;
+            const hexKey = (pixel.hex || rgbToHex(pixel.r, pixel.g, pixel.b)).toUpperCase();
+            const newHex = replacements[hexKey];
+            if (newHex) {
+                const r = parseInt(newHex.slice(1, 3), 16);
+                const g = parseInt(newHex.slice(3, 5), 16);
+                const b = parseInt(newHex.slice(5, 7), 16);
+                return { ...pixel, r, g, b, hex: newHex };
+            }
+            return { ...pixel };
+        }));
+    }
+
+    if (aiColorizeBtn) {
+        aiColorizeBtn.addEventListener('click', async () => {
+            if (!currentGridResponse) return;
+
+            const originalHTML = aiColorizeBtn.innerHTML;
+            aiColorizeBtn.innerHTML = '<span class="btn-spinner"></span>AI 分析中...';
+            aiColorizeBtn.disabled = true;
+            aiResultArea.style.display = 'none';
+            pendingAiGrid = null;
+
+            try {
+                const imageBase64 = canvas.toDataURL('image/png');
+                // 原始图片（sourceImage.src 已经是 base64 data URL）
+                const originalImageBase64 = sourceImage.src || null;
+                const colorCounts = Exporter.countColors(currentGridResponse);
+                const colors = colorCounts.map(c => ({
+                    hex: c.hex.toUpperCase(),
+                    count: c.count
+                }));
+
+                const resp = await fetch('/api/ai/colorize', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ imageBase64, originalImageBase64, colors, style: selectedAiStyle })
+                });
+
+                const data = await resp.json();
+                if (!resp.ok) throw new Error(data.error || '请求失败');
+
+                const { replacements } = data;
+                const changedCount = Object.keys(replacements).length;
+
+                if (changedCount === 0) {
+                    aiReasonText.textContent = 'AI 认为当前配色已很好，无需调整。';
+                } else {
+                    // 统计合并后的颜色数
+                    const afterColors = new Set(
+                        colorCounts.map(c => replacements[c.hex.toUpperCase()] || c.hex.toUpperCase())
+                    );
+                    aiReasonText.textContent = `AI 建议将 ${changedCount} 种颜色合并替换，颜色总数从 ${colorCounts.length} 种减少为 ${afterColors.size} 种。`;
+                }
+
+                pendingAiGrid = applyColorReplacements(currentGridResponse, replacements);
+                renderPreviewCanvas(aiBeforeCanvas, currentGridResponse);
+                renderPreviewCanvas(aiAfterCanvas, pendingAiGrid);
+                aiResultArea.style.display = 'block';
+
+            } catch (err) {
+                alert('AI 调色失败：' + err.message);
+            } finally {
+                aiColorizeBtn.innerHTML = originalHTML;
+                aiColorizeBtn.disabled = false;
+            }
+        });
+    }
+
+    if (aiAcceptBtn) {
+        aiAcceptBtn.addEventListener('click', () => {
+            if (!pendingAiGrid) return;
+            currentGridResponse = pendingAiGrid;
+            pendingAiGrid = null;
+            px.drawGrid(currentGridResponse);
+            updateStats(currentGridResponse);
+            aiResultArea.style.display = 'none';
+        });
+    }
+
+    if (aiRejectBtn) {
+        aiRejectBtn.addEventListener('click', () => {
+            pendingAiGrid = null;
+            aiResultArea.style.display = 'none';
+        });
+    }
+
     // Boot
-    // init(); 
+    // init();
     loginModal.show();
 });

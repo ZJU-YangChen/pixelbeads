@@ -217,6 +217,146 @@ app.delete('/api/history/:id', async (req, res) => {
     }
 });
 
+// --- AI 调色 ---
+
+const STYLE_PROMPTS = {
+    simple: {
+        name: '极简拼豆',
+        prompt: `优化目标：减少颜色种类至8-12种，降低制作难度。
+处理策略（按优先级）：
+① 处理孤立噪点：颜色与周围像素格格不入的孤立点，归并到周围主色
+② 合并低频色：使用比例低于总像素1.5%的颜色，合并到色差最小的主色中
+③ 参考原始照片确认哪些颜色是图案核心，优先保留这些颜色
+不要改动超过35%的颜色种类，保留图案整体视觉结构。`
+    },
+    standard: {
+        name: '标准图纸',
+        prompt: `优化目标：局部修正为主，轻度整理颜色，目标12-16种。
+处理策略（按优先级）：
+① 处理孤立噪点：孤立的单像素异色点归并到周围主色
+② 平滑边缘过渡：两色块交界处若颜色跳跃过大，替换为色板中更接近的中间色
+③ 合并色差小于10的极相近重复色
+参考原始照片保持图案主要色彩结构不变，不要做整体色调的改变。`
+    },
+    detailed: {
+        name: '细腻还原',
+        prompt: `优化目标：最小改动，只修正最明显的局部问题，最大程度保留原始效果。
+处理策略（按优先级）：
+① 只处理最明显的孤立噪点（周围4格颜色均不同的单像素）
+② 只合并色差小于6的几乎相同颜色（纯去重复）
+参考原始照片验证修改方向。宁可不改也不改错，边缘过渡保留像素画固有风格。`
+    },
+    cartoon: {
+        name: '卡通硬边',
+        prompt: `优化目标：强化卡通平涂效果，每个视觉区域颜色统一，目标8-12种。
+处理策略（按优先级）：
+① 参考原始照片识别主要色彩区域（背景/主体/轮廓等）
+② 消除每个色块内部的渐变过渡色，统一为该区域主色
+③ 过渡区像素归并到色差更小的一侧主色，强调硬边分区
+保留清晰的轮廓线颜色，不要将轮廓色合并到背景色。`
+    },
+    gradient: {
+        name: '柔和渐变',
+        prompt: `优化目标：修正生硬的颜色跳跃，使过渡更自然，不减少颜色总数。
+处理策略（按优先级）：
+① 参考原始照片识别明暗渐变区域和过渡方向
+② 检查两色块交界的边缘像素，若色差过大，替换为色板中更接近的中间过渡色
+③ 处理色块内部的孤立异色噪点
+重在让已有颜色的分布更合理，相邻像素色差更平滑，不做大范围颜色替换。`
+    }
+};
+
+const BASE_SYSTEM_PROMPT = `你是专业的拼豆图纸像素修正师。拼豆（Perler Beads）是用彩色塑料珠在网格板上拼出图案的手工艺品。
+
+我会提供两张图：第一张是原始照片（用于理解图案的色彩意图），第二张是像素化处理后的图纸（需要修正的对象）。
+
+核心原则：
+1. 以原始照片为参考，理解图案真实的颜色分布和结构
+2. 对像素图进行最小化修改，不要做整体色调替换
+3. 重点修正局部问题：孤立噪点像素、边缘过渡生硬处
+4. 绝对禁止引入色板中不存在的新颜色，目标色必须是已有色板中的hex值
+5. 如果某颜色不需要改变，不要将其写入输出
+
+输出格式：严格的JSON对象，key为原hex（含#，全大写），value为目标hex（含#，全大写）。
+不要输出任何解释，不要使用markdown代码块，直接输出JSON。
+示例：{"#A1B2C3": "#C5A882"}`;
+
+app.post('/api/ai/colorize', async (req, res) => {
+    const apiKey = process.env.QWEN_API_KEY;
+    if (!apiKey) return res.status(503).json({ error: 'QWEN_API_KEY 未配置，请在环境变量中设置' });
+
+    const { imageBase64, originalImageBase64, colors, style } = req.body;
+    if (!imageBase64 || !colors || !style) {
+        return res.status(400).json({ error: '缺少必要参数: imageBase64, colors, style' });
+    }
+
+    const styleConfig = STYLE_PROMPTS[style];
+    if (!styleConfig) return res.status(400).json({ error: `未知风格: ${style}` });
+
+    const systemPrompt = `${BASE_SYSTEM_PROMPT}\n\n当前优化风格：【${styleConfig.name}】\n${styleConfig.prompt}`;
+    const colorList = colors.map(c => `${c.hex}(${c.count}px)`).join(', ');
+    const userText = `第一张图是原始照片，第二张图是像素化处理后的图纸。\n当前色板共 ${colors.length} 种颜色：${colorList}\n\n请按照【${styleConfig.name}】风格修正像素图的配色，返回颜色替换JSON。`;
+
+    // 构建图片内容：原图（若有）+ 像素图
+    const imageContent = [];
+    if (originalImageBase64) {
+        imageContent.push({ type: 'image_url', image_url: { url: originalImageBase64 } });
+    }
+    imageContent.push({ type: 'image_url', image_url: { url: imageBase64 } });
+    imageContent.push({ type: 'text', text: userText });
+
+    try {
+        const response = await fetch('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                model: 'qwen-vl-plus',
+                messages: [
+                    { role: 'system', content: systemPrompt },
+                    {
+                        role: 'user',
+                        content: imageContent
+                    }
+                ],
+                max_tokens: 1000
+            })
+        });
+
+        if (!response.ok) {
+            const errText = await response.text();
+            return res.status(502).json({ error: `Qwen API 错误 (${response.status}): ${errText}` });
+        }
+
+        const data = await response.json();
+        const rawText = (data.choices?.[0]?.message?.content || '').trim();
+
+        // 提取 JSON，兼容 Qwen 偶尔包裹 markdown 代码块的情况
+        const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) {
+            return res.status(502).json({ error: 'AI返回格式异常，无法解析', raw: rawText.slice(0, 200) });
+        }
+
+        const replacements = JSON.parse(jsonMatch[0]);
+
+        // 安全校验：确保 value 都在原始色板中（防止 AI 生成幻觉颜色）
+        const validHexSet = new Set(colors.map(c => c.hex.toUpperCase()));
+        const safeReplacements = {};
+        for (const [from, to] of Object.entries(replacements)) {
+            const toUpper = to.toUpperCase();
+            if (validHexSet.has(toUpper)) {
+                safeReplacements[from.toUpperCase()] = toUpper;
+            }
+        }
+
+        res.json({ replacements: safeReplacements });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
