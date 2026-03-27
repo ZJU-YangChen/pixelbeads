@@ -67,10 +67,15 @@ initDb();
 app.post('/api/auth/register', async (req, res) => {
     const { username, password } = req.body;
     if (!username || !password) return res.status(400).json({ error: 'Missing fields' });
-    
-    // Validate username (letters only for consistency with previous discussion)
+
     if (!/^[a-zA-Z0-9_]+$/.test(username)) {
-        return res.status(400).json({ error: 'Invalid username format' });
+        return res.status(400).json({ error: '用户名只能包含英文字母、数字和下划线' });
+    }
+    if (username.length < 3 || username.length > 20) {
+        return res.status(400).json({ error: '用户名长度须在 3-20 位之间' });
+    }
+    if (password.length < 6) {
+        return res.status(400).json({ error: '密码至少需要 6 位' });
     }
 
     try {
