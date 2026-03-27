@@ -441,6 +441,86 @@
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: rgba(121,152,166,0.25); border-radius: 3px; }
         ::-webkit-scrollbar-thumb:hover { background: rgba(121,152,166,0.45); }
+
+        /* ===== 移动端响应式 ===== */
+        @media (max-width: 767.98px) {
+            /* Navbar 紧凑 */
+            .navbar-brand { font-size: 0.88rem; }
+            .navbar .btn-outline-light {
+                font-size: 0.7rem;
+                padding: 3px 7px;
+            }
+            #userDisplay { display: none !important; }
+
+            /* 步骤进度条：缩小 */
+            .step-progress { padding: 12px 0 16px; }
+            .step-dot { width: 30px; height: 30px; font-size: 0.78rem; }
+            .step-label { font-size: 0.58rem; }
+            .step-line { min-width: 10px; max-width: 36px; margin: 0 3px; margin-bottom: 20px; }
+
+            /* 参数步骤：生成按钮满宽 */
+            #generateBtn { width: 100%; margin-bottom: 6px; }
+
+            /* 统计表格：字体缩小，内边距压缩 */
+            #statsTable { font-size: 0.72rem; }
+            #statsTable th, #statsTable td { padding: 3px 2px; }
+            .color-box { width: 16px; height: 16px; }
+
+            /* 放大镜浮窗：底部弹出浮层（bottom sheet） */
+            #magnifierFloatingWindow {
+                position: fixed !important;
+                top: auto !important;
+                bottom: 0 !important;
+                left: 0 !important;
+                right: 0 !important;
+                width: 100% !important;
+                max-width: 100% !important;
+                max-height: 72vh;
+                border-radius: 18px 18px 0 0 !important;
+                box-shadow: 0 -4px 30px rgba(0,0,0,0.18) !important;
+                display: flex;
+                flex-direction: column;
+                overflow: hidden;
+            }
+            #magnifierFloatingWindow .card-body { overflow-y: auto; flex: 1; }
+            /* 拖拽标题栏在移动端改为把手样式 */
+            #magnifierDragHeader {
+                cursor: default !important;
+                justify-content: center;
+                position: relative;
+            }
+            #magnifierDragHeader::before {
+                content: '';
+                position: absolute;
+                top: 8px;
+                left: 50%;
+                transform: translateX(-50%);
+                width: 36px;
+                height: 4px;
+                background: rgba(255,255,255,0.45);
+                border-radius: 2px;
+            }
+            #magnifierDragHeader > span { flex: 1; text-align: center; }
+            #magnifierDragHeader > .btn-close { position: absolute; right: 14px; }
+            /* 隐藏拖拽提示文字 */
+            #magnifierFloatingWindow .card-body > .text-muted.small { display: none; }
+
+            /* 放大镜遮罩：点击背景可关闭 */
+            #magnifierOverlay {
+                display: none;
+                position: fixed;
+                inset: 0;
+                background: rgba(0,0,0,0.25);
+                z-index: 1059;
+            }
+            #magnifierOverlay.show { display: block; }
+
+            /* 预览图最大高度适配 */
+            #sourceImage { max-height: 140px !important; }
+
+            /* canvas 容器最小高度降低 */
+            .canvas-container { min-height: 160px; }
+        }
     </style>
 </head>
 <body>
@@ -699,6 +779,9 @@
             <div id="historyList"></div>
         </div>
     </div>
+
+    <!-- Magnifier Mobile Overlay (tap to close) -->
+    <div id="magnifierOverlay"></div>
 
     <!-- Floating Magnifier Window -->
     <div id="magnifierFloatingWindow" class="card shadow-lg" style="position: fixed; top: 80px; left: 20px; width: 480px; z-index: 1050; display: none;">

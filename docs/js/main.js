@@ -522,12 +522,15 @@ document.addEventListener('DOMContentLoaded', () => {
     pxMag.drawLabels = true;
     pxMag.labelInterval = 1;
 
+    const magnifierOverlay = document.getElementById('magnifierOverlay');
+
     // Init Logic
     if(openMagnifierBtn) {
         openMagnifierBtn.addEventListener('click', () => {
             magState.enabled = true;
             if(magnifierFloatingWindow) magnifierFloatingWindow.style.display = 'block';
             if(lensOverlay) lensOverlay.style.display = 'block';
+            if(magnifierOverlay) magnifierOverlay.classList.add('show');
             updateMagnifier();
         });
     }
@@ -537,6 +540,16 @@ document.addEventListener('DOMContentLoaded', () => {
              magState.enabled = false;
              if(magnifierFloatingWindow) magnifierFloatingWindow.style.display = 'none';
              if(lensOverlay) lensOverlay.style.display = 'none';
+             if(magnifierOverlay) magnifierOverlay.classList.remove('show');
+        });
+    }
+
+    if(magnifierOverlay) {
+        magnifierOverlay.addEventListener('click', () => {
+            magState.enabled = false;
+            if(magnifierFloatingWindow) magnifierFloatingWindow.style.display = 'none';
+            if(lensOverlay) lensOverlay.style.display = 'none';
+            magnifierOverlay.classList.remove('show');
         });
     }
 
@@ -642,7 +655,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Auto-fit scale logic
         // Container is approx 480px wide (card width) - padding.
         // We removed the height restriction, so we just fit to Width.
-        const safeWidth = 420;
+        const safeWidth = Math.min(420, window.innerWidth - 48);
         
         const cols = subGrid[0].length;
         const rows = subGrid.length;
@@ -706,13 +719,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if(lensOverlay) {
         lensOverlay.addEventListener('mousedown', (e) => {
-            e.stopPropagation(); 
+            e.stopPropagation();
             magState.isDragging = true;
             lensOverlay.style.cursor = 'grabbing';
         });
+        lensOverlay.addEventListener('touchstart', (e) => {
+            e.stopPropagation();
+            magState.isDragging = true;
+        }, { passive: true });
     }
 
-    window.addEventListener('mouseup', () => { 
+    window.addEventListener('mouseup', () => {
         if(magState.isDragging) {
             magState.isDragging = false;
             if(lensOverlay) lensOverlay.style.cursor = 'grab';
@@ -725,30 +742,61 @@ document.addEventListener('DOMContentLoaded', () => {
             const rect = canvas.getBoundingClientRect();
             const gridW = currentGridResponse[0].length;
             const gridH = currentGridResponse.length;
-            
-            const pxMargin = px.drawLabels ? 25 : 0; 
+
+            const pxMargin = px.drawLabels ? 25 : 0;
             const logicalW = (gridW * px.scale) + pxMargin;
             const logicalH = (gridH * px.scale) + pxMargin;
             const ratioX = rect.width / logicalW;
             const ratioY = rect.height / logicalH;
-            
+
             const originX = pxMargin * ratioX;
             const originY = pxMargin * ratioY;
             const visualBlockW = px.scale * ratioX;
             const visualBlockH = px.scale * ratioY;
-            
+
             const mx = e.clientX - rect.left - originX;
             const my = e.clientY - rect.top - originY;
-            
+
             const gx = Math.floor(mx / visualBlockW);
             const gy = Math.floor(my / visualBlockH);
-            
+
             const half = Math.floor(magState.size / 2);
             magState.x = gx - half;
             magState.y = gy - half;
             updateMagnifier();
         }
     });
+
+    // Touch equivalent for lens drag
+    window.addEventListener('touchend', () => {
+        if(magState.isDragging) magState.isDragging = false;
+    }, { passive: true });
+
+    window.addEventListener('touchmove', (e) => {
+        if (magState.isDragging && magState.enabled && currentGridResponse) {
+            const touch = e.touches[0];
+            const rect = canvas.getBoundingClientRect();
+            const gridW = currentGridResponse[0].length;
+            const gridH = currentGridResponse.length;
+            const pxMargin = px.drawLabels ? 25 : 0;
+            const logicalW = (gridW * px.scale) + pxMargin;
+            const logicalH = (gridH * px.scale) + pxMargin;
+            const ratioX = rect.width / logicalW;
+            const ratioY = rect.height / logicalH;
+            const originX = pxMargin * ratioX;
+            const originY = pxMargin * ratioY;
+            const visualBlockW = px.scale * ratioX;
+            const visualBlockH = px.scale * ratioY;
+            const mx = touch.clientX - rect.left - originX;
+            const my = touch.clientY - rect.top - originY;
+            const gx = Math.floor(mx / visualBlockW);
+            const gy = Math.floor(my / visualBlockH);
+            const half = Math.floor(magState.size / 2);
+            magState.x = gx - half;
+            magState.y = gy - half;
+            updateMagnifier();
+        }
+    }, { passive: true });
 
     // Bead Mode Toggle - REMOVED
 
@@ -812,6 +860,25 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+    // Touch on canvas: move magnifier on mobile
+    canvas.addEventListener('touchstart', (e) => {
+        if (!currentGridResponse || !magState.enabled) return;
+        const touch = e.touches[0];
+        const rect = canvas.getBoundingClientRect();
+        const ratioX = canvas.width / rect.width;
+        const ratioY = canvas.height / rect.height;
+        const canvasX = (touch.clientX - rect.left) * ratioX;
+        const canvasY = (touch.clientY - rect.top) * ratioY;
+        const pxMargin = px.drawLabels ? 25 : 0;
+        const x = Math.floor((canvasX - pxMargin) / px.scale);
+        const y = Math.floor((canvasY - pxMargin) / px.scale);
+        if (x < 0 || x >= currentGridResponse[0].length || y < 0 || y >= currentGridResponse.length) return;
+        const half = Math.floor(magState.size / 2);
+        magState.x = x - half;
+        magState.y = y - half;
+        updateMagnifier();
+    }, { passive: true });
 
     // --- Stats & Completion ---
 
