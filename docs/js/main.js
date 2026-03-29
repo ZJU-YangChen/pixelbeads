@@ -1013,7 +1013,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     completeBtn.addEventListener('click', async () => {
         if (!currentCounts || !currentGridResponse) return;
-        if (!confirm(“确定要”拼他”吗？这将扣除对应的库存数量并保存到历史记录。”)) return;
+        if (!confirm('确定要”拼他”吗？这将扣除对应的库存数量并保存到历史记录。')) return;
         track('complete_bead');
 
         const check = StorageService.checkStock(currentCounts);
