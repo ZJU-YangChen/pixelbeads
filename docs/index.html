@@ -538,6 +538,7 @@
             <div class="d-flex align-items-center gap-2">
                 <button class="btn btn-sm btn-outline-light" id="openInventoryDrawer">📦 我的库存</button>
                 <button class="btn btn-sm btn-outline-light" id="openHistoryDrawer">📜 历史作品</button>
+                <button class="btn btn-sm btn-outline-light" id="openFeedbackModal">💬 反馈</button>
                 <span id="userDisplay" class="text-light ms-1 small"></span>
                 <button id="logoutBtn" class="btn btn-sm btn-outline-light" style="display:none;">退出</button>
             </div>
@@ -785,6 +786,28 @@
         </div>
         <div class="drawer-body">
             <div id="historyList"></div>
+        </div>
+    </div>
+
+    <!-- Feedback Modal -->
+    <div class="modal fade" id="feedbackModal" tabindex="-1" aria-labelledby="feedbackModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="feedbackModalLabel">💬 问题反馈</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <textarea class="form-control" id="feedbackText" rows="4" maxlength="100" placeholder="请描述您遇到的问题或建议（100字以内）..."></textarea>
+                    <div class="text-end text-muted small mt-1"><span id="feedbackCharCount">0</span>/100</div>
+                    <div id="feedbackSuccess" class="alert alert-success d-none mt-2 mb-0 py-2 small">感谢您的反馈！我们会认真查看。</div>
+                    <div id="feedbackError" class="alert alert-danger d-none mt-2 mb-0 py-2 small">提交失败，请稍后重试。</div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary" id="submitFeedbackBtn">提交反馈</button>
+                </div>
+            </div>
         </div>
     </div>
 

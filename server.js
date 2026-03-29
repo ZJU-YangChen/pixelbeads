@@ -380,6 +380,26 @@ app.post('/api/events', async (req, res) => {
 
 // --- Admin Stats ---
 
+// --- Feedback ---
+
+app.post('/api/feedback', async (req, res) => {
+    const { user_id, content } = req.body;
+    if (!content || content.trim().length === 0) {
+        return res.status(400).json({ error: '反馈内容不能为空' });
+    }
+    if (content.trim().length > 100) {
+        return res.status(400).json({ error: '反馈内容不能超过100字' });
+    }
+    try {
+        await db.query('INSERT INTO feedback (user_id, content) VALUES (?, ?)', [user_id || null, content.trim()]);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// --- Admin Stats ---
+
 const ADMIN_PWD = process.env.ADMIN_PWD || 'yangchen1215';
 
 app.get('/api/admin/stats', async (req, res) => {
@@ -407,11 +427,18 @@ app.get('/api/admin/stats', async (req, res) => {
              GROUP BY DATE(created_at) ORDER BY date`
         );
 
+        const [feedbackList] = await db.query(
+            `SELECT f.id, f.content, f.created_at, u.username
+             FROM feedback f LEFT JOIN users u ON f.user_id = u.id
+             ORDER BY f.created_at DESC LIMIT 50`
+        );
+
         res.json({
             users: { total: total_users, today: today_users, week: week_users },
             events: Object.fromEntries(eventCounts.map(r => [r.event_name, Number(r.count)])),
             daily_events: dailyEvents,
-            daily_users: dailyUsers
+            daily_users: dailyUsers,
+            feedback: feedbackList
         });
     } catch (err) {
         res.status(500).json({ error: err.message });

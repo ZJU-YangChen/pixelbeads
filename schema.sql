@@ -38,3 +38,11 @@ CREATE TABLE IF NOT EXISTS events (
     INDEX idx_event_name (event_name),
     INDEX idx_created_at (created_at)
 );
+
+CREATE TABLE IF NOT EXISTS feedback (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT,
+    content VARCHAR(100) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+);

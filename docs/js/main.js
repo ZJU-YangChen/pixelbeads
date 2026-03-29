@@ -176,6 +176,57 @@ document.addEventListener('DOMContentLoaded', () => {
     if (closeInvBtn) closeInvBtn.addEventListener('click', closeAllDrawers);
     if (closeHisBtn) closeHisBtn.addEventListener('click', closeAllDrawers);
     if (drawerOverlay) drawerOverlay.addEventListener('click', closeAllDrawers);
+
+    // --- Feedback Modal ---
+    const feedbackModalEl = document.getElementById('feedbackModal');
+    const feedbackModal = feedbackModalEl ? new bootstrap.Modal(feedbackModalEl) : null;
+    const feedbackText = document.getElementById('feedbackText');
+    const feedbackCharCount = document.getElementById('feedbackCharCount');
+
+    const openFeedbackBtn = document.getElementById('openFeedbackModal');
+    if (openFeedbackBtn && feedbackModal) {
+        openFeedbackBtn.addEventListener('click', () => {
+            if (feedbackText) feedbackText.value = '';
+            if (feedbackCharCount) feedbackCharCount.textContent = '0';
+            document.getElementById('feedbackSuccess')?.classList.add('d-none');
+            document.getElementById('feedbackError')?.classList.add('d-none');
+            feedbackModal.show();
+        });
+    }
+    if (feedbackText && feedbackCharCount) {
+        feedbackText.addEventListener('input', () => {
+            feedbackCharCount.textContent = feedbackText.value.length;
+        });
+    }
+    const submitFeedbackBtn = document.getElementById('submitFeedbackBtn');
+    if (submitFeedbackBtn) {
+        submitFeedbackBtn.addEventListener('click', async () => {
+            const content = feedbackText ? feedbackText.value.trim() : '';
+            if (!content) return;
+            submitFeedbackBtn.disabled = true;
+            try {
+                const userId = currentUserId;
+                const resp = await fetch('/api/feedback', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: userId, content })
+                });
+                if (resp.ok) {
+                    document.getElementById('feedbackSuccess')?.classList.remove('d-none');
+                    document.getElementById('feedbackError')?.classList.add('d-none');
+                    if (feedbackText) feedbackText.value = '';
+                    if (feedbackCharCount) feedbackCharCount.textContent = '0';
+                    setTimeout(() => feedbackModal?.hide(), 1500);
+                } else {
+                    document.getElementById('feedbackError')?.classList.remove('d-none');
+                }
+            } catch {
+                document.getElementById('feedbackError')?.classList.remove('d-none');
+            } finally {
+                submitFeedbackBtn.disabled = false;
+            }
+        });
+    }
     if (reuploadBtn) {
         reuploadBtn.addEventListener('click', () => {
             fileInput.value = '';

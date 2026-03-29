@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PixelBeads 数据后台</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <link href="css/bootstrap.min.css" rel="stylesheet">
+    <script src="js/chart.umd.min.js"></script>
     <style>
         :root {
             --mo-bg: #eae6e1;
@@ -171,6 +171,18 @@
             </div>
         </div>
 
+        <!-- Feedback List -->
+        <div class="row g-3 mt-0">
+            <div class="col-12">
+                <div class="chart-card">
+                    <div class="chart-title">💬 用户反馈（最新50条）</div>
+                    <div id="feedbackTableWrap">
+                        <p class="text-muted small">暂无反馈</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
     </div>
 </div>
 
@@ -194,9 +206,12 @@
 
     async function tryLogin() {
         savedPwd = document.getElementById('pwdInput').value.trim();
+        const errEl = document.getElementById('pwdError');
+        errEl.textContent = '密码错误，请重试';
+        errEl.classList.add('d-none');
         const ok = await loadDash(savedPwd);
         if (!ok) {
-            document.getElementById('pwdError').classList.remove('d-none');
+            errEl.classList.remove('d-none');
             document.getElementById('pwdInput').select();
         }
     }
@@ -206,7 +221,12 @@
     async function loadDash(pwd) {
         try {
             const resp = await fetch(`/api/admin/stats?pwd=${encodeURIComponent(pwd)}`);
-            if (!resp.ok) return false;
+            if (resp.status === 401) return false;
+            if (!resp.ok) {
+                document.getElementById('pwdError').textContent = '服务器错误，请稍后重试';
+                document.getElementById('pwdError').classList.remove('d-none');
+                return false;
+            }
             const data = await resp.json();
             document.getElementById('loginWrap').style.display = 'none';
             document.getElementById('dashWrap').style.display = 'block';
@@ -214,6 +234,8 @@
             renderDashboard(data);
             return true;
         } catch (e) {
+            document.getElementById('pwdError').textContent = '网络连接失败，请检查网络';
+            document.getElementById('pwdError').classList.remove('d-none');
             return false;
         }
     }
@@ -366,6 +388,27 @@
                 scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
             }
         });
+
+        // --- 用户反馈 ---
+        const fbWrap = document.getElementById('feedbackTableWrap');
+        if (fbWrap) {
+            const feedbackList = data.feedback || [];
+            if (feedbackList.length === 0) {
+                fbWrap.innerHTML = '<p class="text-muted small mb-0">暂无反馈</p>';
+            } else {
+                fbWrap.innerHTML = `<table class="table table-sm table-hover small mb-0">
+                    <thead class="table-light"><tr><th>#</th><th>用户</th><th>内容</th><th>时间</th></tr></thead>
+                    <tbody>${feedbackList.map((f, i) => `
+                        <tr>
+                            <td class="text-muted">${i + 1}</td>
+                            <td>${f.username || '<span class="text-muted">匿名</span>'}</td>
+                            <td>${f.content.replace(/</g, '&lt;')}</td>
+                            <td class="text-muted text-nowrap">${new Date(f.created_at).toLocaleString('zh-CN')}</td>
+                        </tr>`).join('')}
+                    </tbody>
+                </table>`;
+            }
+        }
     }
 
     function getLast14Days() {
