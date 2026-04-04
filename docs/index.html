@@ -406,12 +406,6 @@
             50%       { box-shadow: 0 4px 28px rgba(212,160,156,0.65), 0 0 0 8px rgba(212,160,156,0.12); }
         }
 
-        /* ===== 导入选项卡 ===== */
-        .import-opt-card:has(input:checked) {
-            border-color: #a07850 !important;
-            background: #fdf8f3;
-        }
-
         /* ===== 放大镜窗口 ===== */
         #magnifierFloatingWindow {
             border: 1px solid rgba(255,255,255,0.6);
@@ -706,13 +700,13 @@
                     </div>
                 </div>
 
-                <div class="col-md-4 d-flex flex-column" style="min-height: 0;">
-                    <div class="card flex-grow-1 d-flex flex-column" style="min-height: 0;">
+                <div class="col-md-4 d-flex flex-column">
+                    <div class="card flex-grow-1 d-flex flex-column">
                         <div class="card-header d-flex justify-content-between align-items-center">
-                            <span>豆子用量</span>
+                            <span>珠子用量</span>
                             <button class="btn btn-sm btn-outline-primary rounded-pill" id="downloadStats">导出清单</button>
                         </div>
-                        <div class="card-body p-0 flex-grow-1" style="overflow-y: auto; min-height: 0;">
+                        <div class="card-body p-0 flex-grow-1" style="overflow-y: auto;">
                             <div class="table-responsive">
                                 <table class="table table-striped table-hover mb-0 text-center" id="statsTable">
                                     <thead>
@@ -760,7 +754,6 @@
         <div class="drawer-header">
             <span>📦 豆子库存管理</span>
             <div class="d-flex gap-2 align-items-center">
-                <button class="btn btn-sm btn-outline-primary" id="batchImportBtn">批量导入</button>
                 <button class="btn btn-sm btn-primary" id="addBeadBtn">+ 添加颜色</button>
                 <button class="btn-close" id="closeInventoryDrawer"></button>
             </div>
@@ -796,96 +789,7 @@
         </div>
     </div>
 
-    <!-- Inventory Import Modal -->
-    <div class="modal fade" id="inventoryImportModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header" style="background:linear-gradient(135deg,#c8a882,#a07850);color:#fff">
-                    <h5 class="modal-title" id="importModalTitle">批量导入豆子库存</h5>
-                </div>
-                <div class="modal-body pb-2">
-                    <!-- 选择方式 -->
-                    <p class="text-muted small mb-3">选择导入方式：</p>
-                    <div class="d-flex gap-3 mb-4 flex-wrap">
-                        <label class="import-opt-card flex-fill" style="cursor:pointer;border:2px solid #e0d5c8;border-radius:12px;padding:14px 16px;transition:border-color .2s">
-                            <input type="radio" name="importOption" id="importOptMard" value="mard" class="d-none" checked>
-                            <div class="fw-bold mb-1">🏪 品牌色号</div>
-                            <div class="text-muted small">导入 MARD 官方豆子色号</div>
-                        </label>
-                        <label class="import-opt-card flex-fill" style="cursor:pointer;border:2px solid #e0d5c8;border-radius:12px;padding:14px 16px;transition:border-color .2s">
-                            <input type="radio" name="importOption" id="importOptUpload" value="upload" class="d-none">
-                            <div class="fw-bold mb-1">📷 上传色卡</div>
-                            <div class="text-muted small">拍照上传，AI 自动识别颜色</div>
-                        </label>
-                        <label class="import-opt-card flex-fill" style="cursor:pointer;border:2px solid #e0d5c8;border-radius:12px;padding:14px 16px;transition:border-color .2s">
-                            <input type="radio" name="importOption" id="importOptDefault" value="default" class="d-none">
-                            <div class="fw-bold mb-1">🎨 默认配色</div>
-                            <div class="text-muted small">使用系统内置标准色板</div>
-                        </label>
-                    </div>
-
-                    <!-- mard 面板 -->
-                    <div id="mardPanel">
-                        <div class="d-flex align-items-center gap-3 mb-3 flex-wrap">
-                            <div>
-                                <label class="form-label small fw-bold mb-1">套餐规格</label>
-                                <select class="form-select form-select-sm" id="mardPackageSelect" style="width:120px">
-                                    <option value="24">24色</option>
-                                    <option value="48">48色</option>
-                                    <option value="72">72色</option>
-                                    <option value="96" selected>96色</option>
-                                    <option value="120">120色</option>
-                                    <option value="144">144色</option>
-                                    <option value="216">216色</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label class="form-label small fw-bold mb-1">初始库存量（每色）</label>
-                                <input type="number" class="form-control form-control-sm" id="importDefaultQty" value="1000" min="0" max="99999" style="width:100px">
-                            </div>
-                            <div class="align-self-end">
-                                <span class="badge bg-secondary" id="mardColorCount">—</span>
-                            </div>
-                        </div>
-                        <div class="d-flex flex-wrap gap-1 p-2 rounded" style="background:#f8f4f0;max-height:160px;overflow-y:auto" id="mardPreviewGrid"></div>
-                    </div>
-
-                    <!-- 上传色卡面板 -->
-                    <div id="uploadPanel" class="d-none">
-                        <div class="mb-3">
-                            <label class="form-label small fw-bold">上传色卡图片</label>
-                            <input type="file" class="form-control form-control-sm" id="colorCardUpload" accept="image/*">
-                        </div>
-                        <div class="mb-2">
-                            <label class="form-label small fw-bold mb-1">初始库存量（每色）</label>
-                            <input type="number" class="form-control form-control-sm" id="importDefaultQty" value="1000" min="0" max="99999" style="width:120px">
-                        </div>
-                        <div id="uploadStatusMsg" class="small text-muted mb-2"></div>
-                        <div class="d-flex flex-wrap gap-1 p-2 rounded" style="background:#f8f4f0;max-height:160px;overflow-y:auto" id="uploadPreviewGrid"></div>
-                    </div>
-
-                    <!-- 默认配色面板 -->
-                    <div id="defaultPanel" class="d-none">
-                        <div class="alert alert-light border small py-2">
-                            将使用系统内置的标准 RGB 色板（216 种常用颜色），适合初始体验。<br>
-                            你随时可以在库存管理中修改或重新导入。
-                        </div>
-                        <div class="mb-2">
-                            <label class="form-label small fw-bold mb-1">初始库存量（每色）</label>
-                            <input type="number" class="form-control form-control-sm" id="importDefaultQtyDef" value="1000" min="0" max="99999" style="width:120px">
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer border-0 pt-0">
-                    <button type="button" class="btn btn-link text-muted" id="importSkipBtn">跳过</button>
-                    <button type="button" class="btn btn-primary px-4" id="importConfirmBtn">确认导入</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <!-- Feedback Modal -->
-
     <div class="modal fade" id="feedbackModal" tabindex="-1" aria-labelledby="feedbackModalLabel" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content">
@@ -1039,10 +943,9 @@
     <!-- Scripts -->
     <script src="js/bootstrap.bundle.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-    <script src="js/storage.js?v=20260403"></script>
-    <script src="js/pixelit.js?v=20260403"></script>
-    <script src="js/exporter.js?v=20260403"></script>
-    <script src="js/inventory-import.js?v=20260403"></script>
-    <script src="js/main.js?v=20260403"></script>
+    <script src="js/storage.js?v=20260327"></script>
+    <script src="js/pixelit.js?v=20260327"></script>
+    <script src="js/exporter.js?v=20260327"></script>
+    <script src="js/main.js?v=20260327"></script>
 </body>
 </html>

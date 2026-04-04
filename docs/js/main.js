@@ -57,27 +57,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const userDisplay = document.getElementById('userDisplay');
 
     // Auth Logic
-    const handleLoginSuccess = (user, isNew = false) => {
+    const handleLoginSuccess = (user) => {
         loginModal.hide();
         currentUserId = user.id;
         userDisplay.innerText = `👤 ${user.username}`;
         logoutBtn.style.display = 'block';
         init(); // Start App
-
-        // 新用户弹出库存初始化向导
-        if (StorageService.isNewUser()) {
-            InventoryImport.open({
-                isNew: true,
-                onDone: (action, count) => {
-                    if (action === 'imported') {
-                        renderInventoryTable();
-                        paletteSelect.value = 'my_inventory';
-                        updatePalette();
-                        showToast(`已导入 ${count} 种颜色到库存`);
-                    }
-                }
-            });
-        }
     };
 
     loginForm.addEventListener('submit', async (e) => {
@@ -192,25 +177,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (closeHisBtn) closeHisBtn.addEventListener('click', closeAllDrawers);
     if (drawerOverlay) drawerOverlay.addEventListener('click', closeAllDrawers);
 
-    // 库存抽屉 - 批量导入按钮
-    const batchImportBtn = document.getElementById('batchImportBtn');
-    if (batchImportBtn) batchImportBtn.addEventListener('click', () => {
-        InventoryImport.open({
-            isNew: false,
-            onDone: (action, count) => {
-                if (action === 'imported') {
-                    renderInventoryTable();
-                    paletteSelect.value = 'my_inventory';
-                    updatePalette();
-                    showToast(`已导入 ${count} 种颜色到库存`);
-                }
-            }
-        });
-    });
-
-    // 初始化导入模态框
-    InventoryImport.init();
-
     // --- Feedback Modal ---
     const feedbackModalEl = document.getElementById('feedbackModal');
     const feedbackModal = feedbackModalEl ? new bootstrap.Modal(feedbackModalEl) : null;
@@ -283,22 +249,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let originalGridResponse = null; // Store original for reset
     let currentCounts = null; // Store count result
     let currentUserId = null;
-
-    // --- Toast 通知 ---
-    function showToast(msg, type = 'success') {
-        const t = document.createElement('div');
-        t.textContent = msg;
-        t.style.cssText = `position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);
-            background:${type === 'success' ? '#5f8e88' : '#b04040'};color:#fff;
-            padding:10px 20px;border-radius:20px;font-size:14px;z-index:9999;
-            box-shadow:0 4px 16px rgba(0,0,0,.2);opacity:0;transition:all .3s ease`;
-        document.body.appendChild(t);
-        requestAnimationFrame(() => { t.style.opacity = '1'; t.style.transform = 'translateX(-50%) translateY(0)'; });
-        setTimeout(() => {
-            t.style.opacity = '0'; t.style.transform = 'translateX(-50%) translateY(10px)';
-            setTimeout(() => t.remove(), 350);
-        }, 2500);
-    }
 
     // --- Analytics ---
     function track(eventName, properties = {}) {
@@ -1227,26 +1177,17 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // --- Exports ---
-
-    function buildHexToBeadId() {
-        const map = {};
-        StorageService.getInventory().forEach(i => {
-            map[i.hex.toUpperCase()] = i.id;
-        });
-        return map;
-    }
-
+    
     btnPng.addEventListener('click', () => {
         if (!currentGridResponse) return alert('请先生成图纸');
         track('export_png');
-
+        
         const opts = {
             showNumbers: chkNumbers.checked,
-            cellSize: 20,
-            hexToBeadId: buildHexToBeadId()
+            cellSize: 20
         };
         const printCanvas = Exporter.generatePrintableCanvas(currentGridResponse, opts);
-
+        
         printCanvas.toBlob(blob => {
             const link = document.createElement('a');
             link.download = `pixelbeads_design_${Date.now()}.png`;
@@ -1257,7 +1198,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     btnCsv.addEventListener('click', () => {
         if (!currentGridResponse) return alert('请先生成图纸');
-        Exporter.exportGridCSV(currentGridResponse, buildHexToBeadId());
+        Exporter.exportGridCSV(currentGridResponse);
     });
 
     btnStats.addEventListener('click', () => {
