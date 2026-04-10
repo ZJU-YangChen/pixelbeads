@@ -427,19 +427,17 @@ app.post('/api/ai/personality', async (req, res) => {
     const apiKey = process.env.QWEN_API_KEY;
     if (!apiKey) return res.status(503).json({ error: 'QWEN_API_KEY 未配置' });
 
-    const { imageBase64, beadCount, colorCount } = req.body;
-    if (!imageBase64) return res.status(400).json({ error: '缺少 imageBase64' });
+    const { typeCode, typeName, tagline, beadCount, colorCount } = req.body;
+    if (!typeCode) return res.status(400).json({ error: '缺少 typeCode' });
 
-    const prompt = `你是一位充满创意和幽默感的拼豆人格测评师。
-根据这张拼豆风格的像素图，为用户生成一个专属"拼豆人格"。
+    const prompt = `你是拼豆人格测评师，用户的拼豆人格已被鉴定为【${typeName}】（代码：${typeCode}）。
+人格标签：${tagline}
+用户数据：共用了 ${beadCount} 颗豆子，${colorCount} 种颜色。
 
-输出规则（严格遵守）：
-1. personality：2-6个大写英文字母或连字符组成的人格代码，例如"PIXEL"、"CRAFTY"、"ART-IST"
-2. title：4-8个中文字，人格称号，例如"像素艺术大师"、"颜色捕手"
-3. comment：15-30个中文字，一句风趣有网络感的人格解读
-
-只输出JSON，不要解释，不要markdown代码块：
-{"personality":"PIXEL","title":"像素艺术家","comment":"你的眼里只有像素，生活不过是一张大网格！"}`;
+请用15-25个中文字写一句极具个性的人格解读，要求：
+- 幽默有梗，要有网络感，稍微有点损但亲切
+- 必须包含豆子数量或颜色数量等具体数字
+- 直接输出一句话，不加引号，不加解释`;
 
     try {
         const response = await fetch('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', {
@@ -449,15 +447,9 @@ app.post('/api/ai/personality', async (req, res) => {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                model: 'qwen-vl-plus',
-                messages: [{
-                    role: 'user',
-                    content: [
-                        { type: 'image_url', image_url: { url: imageBase64 } },
-                        { type: 'text', text: prompt }
-                    ]
-                }],
-                max_tokens: 300
+                model: 'qwen-turbo',
+                messages: [{ role: 'user', content: prompt }],
+                max_tokens: 120
             })
         });
 
@@ -467,19 +459,12 @@ app.post('/api/ai/personality', async (req, res) => {
         }
 
         const data = await response.json();
-        const rawText = (data.choices?.[0]?.message?.content || '').trim();
+        let comment = (data.choices?.[0]?.message?.content || '').trim();
+        // Strip quotes if AI added them
+        comment = comment.replace(/^["'"'「」]|["'"'「」]$/g, '').trim().slice(0, 60);
+        if (!comment) comment = `用${colorCount}种颜色拼了${beadCount}颗豆，你的认真程度令人敬畏。`;
 
-        const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-        if (!jsonMatch) {
-            return res.status(502).json({ error: 'AI 返回格式异常', raw: rawText.slice(0, 200) });
-        }
-
-        const parsed = JSON.parse(jsonMatch[0]);
-        const personality = (parsed.personality || 'PIXEL').toUpperCase().replace(/[^A-Z-]/g, '').slice(0, 10) || 'PIXEL';
-        const title = String(parsed.title || '拼豆爱好者').slice(0, 12);
-        const comment = String(parsed.comment || '你是一个热爱拼豆的创意之人！').slice(0, 60);
-
-        res.json({ personality, title, comment });
+        res.json({ comment });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

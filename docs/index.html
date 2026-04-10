@@ -682,6 +682,26 @@
             .btn-personality { font-size: 0.9rem; padding: 10px 24px; }
         }
     </style>
+
+    <style>
+        /* ===== 人格鉴定触发条 ===== */
+        .personality-trigger-card {
+            background: linear-gradient(135deg, #f8f5f2 0%, #f0ebe5 100%);
+            border: 1px solid rgba(122,158,152,0.25) !important;
+            border-radius: var(--mo-border-radius) !important;
+        }
+        /* ===== 人格弹窗 ===== */
+        .personality-modal-header {
+            border-radius: 0 !important;
+            padding: 28px 24px 22px;
+        }
+        #personalityCode {
+            font-family: 'Bebas Neue', 'Arial Black', Impact, sans-serif;
+            font-size: 3.8rem;
+            line-height: 1;
+            letter-spacing: 0.06em;
+        }
+    </style>
 </head>
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark mb-3">
@@ -696,47 +716,6 @@
             </div>
         </div>
     </nav>
-
-    <!-- ✨ 拼豆人格英雄区 -->
-    <section class="personality-hero" id="personalityHero">
-        <div class="container position-relative">
-            <div class="text-center mb-4">
-                <div class="hero-badge">✨ AI 拼豆人格鉴定</div>
-                <h2 class="hero-title">上传你的近期爱照，测测你的<span class="hl">拼豆人格</span></h2>
-                <p class="hero-sub">AI 分析你的像素灵魂，生成专属人格卡，分享给朋友</p>
-            </div>
-
-            <!-- Mode Toggle -->
-            <div class="d-flex justify-content-center mb-3">
-                <div class="mode-toggle">
-                    <button class="mode-btn active" id="modeQuick" data-mode="quick">⚡ 极速像素</button>
-                    <button class="mode-btn" id="modeArt" data-mode="art">🎨 艺术滤镜</button>
-                </div>
-            </div>
-            <div class="text-center mb-4">
-                <span class="mode-desc" id="modeDescQuick">直接像素化照片，保留原色精髓</span>
-                <span class="mode-desc d-none" id="modeDescArt">卡通化处理后再像素化，更有拼豆感</span>
-            </div>
-
-            <!-- Upload Zone -->
-            <div class="personality-upload-zone mx-auto mb-4" id="personalityUploadZone">
-                <div class="pu-placeholder" id="personalityPlaceholder">
-                    <span class="upload-emoji">📸</span>
-                    <div class="fw-semibold mb-1">点击选择照片 / 拖拽到这里</div>
-                    <div class="small opacity-75">建议正方形照片，人像/风景均可</div>
-                </div>
-                <img id="personalityPreview" class="d-none" alt="预览">
-                <input type="file" id="personalityFileInput" accept="image/*" class="d-none">
-            </div>
-
-            <!-- Generate Button -->
-            <div class="text-center">
-                <button class="btn btn-personality" id="btnGeneratePersonality" disabled>
-                    🔮 鉴定我的拼豆人格
-                </button>
-            </div>
-        </div>
-    </section>
 
     <div class="container">
 
@@ -917,6 +896,25 @@
                                 </table>
                             </div>
                         </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 🔮 人格鉴定触发器（图纸生成后显示） -->
+            <div id="personalityTriggerRow" style="display:none;" class="mt-3">
+                <div class="card personality-trigger-card">
+                    <div class="card-body d-flex align-items-center justify-content-between py-3 px-4 flex-wrap gap-2">
+                        <div class="d-flex align-items-center gap-3">
+                            <div style="font-size: 2rem; line-height: 1;">🔮</div>
+                            <div>
+                                <div class="fw-bold" style="color: var(--mo-primary-dark);">测测你的拼豆人格</div>
+                                <div class="small text-muted">基于你的图纸，AI 鉴定你的专属像素人格并生成分享卡</div>
+                            </div>
+                        </div>
+                        <button class="btn rounded-pill px-4 fw-bold flex-shrink-0" id="btnGeneratePersonality"
+                                style="background: linear-gradient(135deg, var(--mo-primary) 0%, var(--mo-accent) 100%); color: white; border: none;">
+                            开始鉴定 →
+                        </button>
                     </div>
                 </div>
             </div>
@@ -1208,21 +1206,54 @@
         </div>
     </div>
 
-    <!-- Personality Result Modal -->
+    <!-- Personality Result Modal (MBTI 风格) -->
     <div class="modal fade" id="personalityModal" tabindex="-1">
-        <div class="modal-dialog modal-dialog-centered" style="max-width: 480px;">
-            <div class="modal-content border-0" style="background: #1a1a2e; border-radius: 20px;">
-                <div class="modal-header border-0 pb-0">
-                    <h5 class="modal-title text-white fw-bold">✨ 你的拼豆人格</h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable" style="max-width: 480px;">
+            <div class="modal-content border-0 overflow-hidden" style="border-radius: 20px; box-shadow: 0 20px 60px rgba(0,0,0,0.25);">
+
+                <!-- 彩色顶部区域 -->
+                <div id="personalityModalHeader" class="personality-modal-header text-center text-white"
+                     style="background: linear-gradient(135deg, #7a9e98, #5d8880);">
+                    <button type="button" class="btn-close btn-close-white float-end" data-bs-dismiss="modal"></button>
+                    <div id="personalityEmoji" style="font-size: 3rem; margin-bottom: 6px; display: block; clear: both;">🎨</div>
+                    <div id="personalityCode" style="margin-bottom: 4px; color: rgba(255,255,255,0.95);">CRAFT</div>
+                    <div id="personalityName" style="font-size: 1.25rem; font-weight: 700; opacity: 0.92;">匠心职人</div>
                 </div>
-                <div class="modal-body text-center pt-2 pb-4">
-                    <canvas id="personalityCardCanvas" class="rounded-3 shadow" style="max-width: 100%; width: 100%;"></canvas>
-                    <div class="d-flex gap-2 justify-content-center mt-3">
-                        <button class="btn btn-light rounded-pill px-4 fw-bold" id="btnSavePersonalityCard">💾 保存图片</button>
-                        <button class="btn rounded-pill px-4 fw-bold" id="btnSharePersonalityCard" style="background: linear-gradient(135deg,#7ac8c0,#e8a5a0); color:#fff; display:none;">📤 分享</button>
+
+                <!-- 白色主体 -->
+                <div class="modal-body text-center pt-4 px-4 pb-2">
+                    <!-- 像素图缩略图 -->
+                    <canvas id="personalityThumb" class="rounded mb-3"
+                            style="max-width: 180px; max-height: 180px; width: 100%; image-rendering: pixelated;
+                                   box-shadow: 0 6px 24px rgba(0,0,0,0.14);"></canvas>
+                    <!-- 标语 -->
+                    <div id="personalityTagline" class="fw-semibold mb-2" style="color: var(--mo-primary-dark); font-size: 0.95rem;">细节决定成败，每颗都算数</div>
+                    <!-- AI 解读 -->
+                    <div id="personalityComment" class="text-muted fst-italic mb-4 lh-lg" style="font-size: 0.9rem;"></div>
+                    <!-- 数据行 -->
+                    <div class="row text-center g-0 border-top pt-3 mb-2">
+                        <div class="col-6 border-end">
+                            <div class="fw-bold fs-5" id="statBeads" style="color: var(--mo-primary);">-</div>
+                            <div class="small text-muted">豆子总量</div>
+                        </div>
+                        <div class="col-6">
+                            <div class="fw-bold fs-5" id="statColors" style="color: var(--mo-accent);">-</div>
+                            <div class="small text-muted">颜色种数</div>
+                        </div>
                     </div>
                 </div>
+
+                <!-- 操作按钮 -->
+                <div class="modal-footer justify-content-center border-0 pt-0 pb-4 gap-2">
+                    <button class="btn btn-outline-secondary rounded-pill px-4" id="btnSavePersonalityCard">💾 保存图片</button>
+                    <button class="btn rounded-pill px-4 fw-bold" id="btnSharePersonalityCard"
+                            style="background: linear-gradient(135deg, var(--mo-primary), var(--mo-accent)); color: white; border: none; display:none;">
+                        📤 分享
+                    </button>
+                </div>
+
+                <!-- 隐藏 canvas（仅用于导出） -->
+                <canvas id="personalityCardCanvas" style="display:none;"></canvas>
             </div>
         </div>
     </div>

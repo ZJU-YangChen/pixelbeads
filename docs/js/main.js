@@ -1117,6 +1117,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         completeBtn.disabled = !hasEnoughStock;
         if (hasEnoughStock) activateStep(4);
+
+        // 显示人格鉴定触发条
+        const personalityTriggerRow = document.getElementById('personalityTriggerRow');
+        if (personalityTriggerRow) personalityTriggerRow.style.display = '';
     }
 
     completeBtn.addEventListener('click', async () => {
@@ -1407,187 +1411,162 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // ===== 拼豆人格测试 =====
+    // ===== 拼豆人格测试（基于图纸分析，16种固定人格） =====
 
-    const personalityUploadZone  = document.getElementById('personalityUploadZone');
-    const personalityFileInput   = document.getElementById('personalityFileInput');
-    const personalityPreview     = document.getElementById('personalityPreview');
-    const personalityPlaceholder = document.getElementById('personalityPlaceholder');
-    const btnGeneratePersonality = document.getElementById('btnGeneratePersonality');
-    const personalityModalEl     = document.getElementById('personalityModal');
-    const personalityCardCanvas  = document.getElementById('personalityCardCanvas');
-    const btnSavePersonalityCard = document.getElementById('btnSavePersonalityCard');
+    const BEAD_PERSONALITIES = [
+        { code: 'PURE',  name: '纯粹原教旨', emoji: '⚪', tagline: '少即是多，极简才是终极美学',          grad: ['#8aafa8','#5d8880'], rule: s => s.colorCount <= 3 },
+        { code: 'ZEN',   name: '佛系拼手',   emoji: '🍃', tagline: '人生苦短，豆不用多，够用就好',        grad: ['#9db5a9','#7a9e98'], rule: s => s.beadCount < 300 },
+        { code: 'EPIC',  name: '万豆不辞',   emoji: '💪', tagline: '量大才是王道，面对豆子绝不退缩',      grad: ['#8aab9a','#5d8880'], rule: s => s.beadCount > 4000 },
+        { code: 'VIVID', name: '彩虹收集癖', emoji: '🌈', tagline: '颜色不够多，人生不够潮',              grad: ['#d4a09c','#b0a8b4'], rule: s => s.colorCount >= 20 },
+        { code: 'CHAOS', name: '创意混沌体', emoji: '🎭', tagline: '规律是给无趣的人准备的，我从不设限',  grad: ['#bc8783','#b0a8b4'], rule: s => s.colorCount >= 14 && s.dominantRatio < 0.25 },
+        { code: 'MONO',  name: '极简主义者', emoji: '🔲', tagline: '每一颗豆都是深思熟虑的决定',          grad: ['#7a9e98','#4a7e78'], rule: s => s.colorCount <= 6 },
+        { code: 'BOLD',  name: '霸道主色派', emoji: '🎯', tagline: '一色定乾坤，气场全开，从不妥协',      grad: ['#d4a09c','#bc8783'], rule: s => s.dominantRatio > 0.5 },
+        { code: 'DARK',  name: '暗黑美学者', emoji: '🖤', tagline: '深邃才是真正的颜色，黑暗即力量',      grad: ['#4a4e6e','#2e3258'], rule: s => s.avgLightness < 0.35 },
+        { code: 'LIGHT', name: '马卡龙少女', emoji: '🍬', tagline: '世界需要更多甜蜜，我来亲自添加',      grad: ['#e8c5c2','#d4a09c'], rule: s => s.avgLightness > 0.72 },
+        { code: 'WARM',  name: '暖系治愈派', emoji: '🌸', tagline: '用暖色对抗世界的冷漠，一豆一温柔',    grad: ['#d4a09c','#bc8783'], rule: s => s.dominantHue === 'warm' },
+        { code: 'COOL',  name: '冷淡风大师', emoji: '❄️', tagline: '冷静克制才是最高境界，情绪稳定是技能', grad: ['#7a9e98','#5d8880'], rule: s => s.dominantHue === 'cool' },
+        { code: 'MASS',  name: '工业量产型', emoji: '🏭', tagline: '效率优先，颜色是浪费，数量才是真理',   grad: ['#b0a8b4','#9098a4'], rule: s => s.beadCount > 1500 && s.colorCount <= 7 },
+        { code: 'MINI',  name: '精准微雕师', emoji: '🔬', tagline: '方寸之间见乾坤，小格子里有大世界',    grad: ['#a0beba','#7a9e98'], rule: s => s.gridW * s.gridH < 400 },
+        { code: 'CRAFT', name: '匠心职人',   emoji: '🎨', tagline: '不多不少刚刚好，细节决定成败',        grad: ['#8aafa8','#6d9080'], rule: s => s.colorCount >= 8 && s.colorCount <= 14 },
+        { code: 'GRAD',  name: '渐变过渡控', emoji: '🎞️', tagline: '人生最美不过过渡时，拒绝突兀跳跃',    grad: ['#a0beba','#b0a8b4'], rule: s => s.colorCount >= 10 && s.dominantRatio < 0.3 },
+        { code: 'PIXEL', name: '标准像素人', emoji: '🟦', tagline: '不偏不倚，平衡即是最高的艺术',        grad: ['#7a9e98','#5d8880'], rule: () => true },
+    ];
+
+    function hexToHsl(hex) {
+        const h = hex.replace('#','');
+        let r = parseInt(h.slice(0,2),16)/255, g = parseInt(h.slice(2,4),16)/255, b = parseInt(h.slice(4,6),16)/255;
+        const max = Math.max(r,g,b), min = Math.min(r,g,b), l = (max+min)/2;
+        let hh = 0;
+        if (max !== min) {
+            const d = max - min;
+            if (max===r) hh = ((g-b)/d + (g<b?6:0))/6;
+            else if (max===g) hh = ((b-r)/d + 2)/6;
+            else hh = ((r-g)/d + 4)/6;
+        }
+        return { h: hh*360, l };
+    }
+
+    function analyzeGridForPersonality(grid) {
+        const counts = Exporter.countColors(grid);
+        const beadCount = counts.reduce((s,c) => s+c.count, 0);
+        const colorCount = counts.length;
+        const dominantRatio = beadCount > 0 ? counts[0].count / beadCount : 0;
+        const gridH = grid.length;
+        const gridW = grid[0] ? grid[0].length : 0;
+        let totalL = 0, warmW = 0, coolW = 0;
+        counts.forEach(c => {
+            const hsl = hexToHsl(c.hex.startsWith('#') ? c.hex : '#'+c.hex);
+            totalL += hsl.l * c.count;
+            if (hsl.h <= 60 || hsl.h >= 300) warmW += c.count;
+            else if (hsl.h >= 120 && hsl.h <= 270) coolW += c.count;
+        });
+        const avgLightness = beadCount > 0 ? totalL / beadCount : 0.5;
+        const dominantHue = warmW > coolW*1.4 ? 'warm' : coolW > warmW*1.4 ? 'cool' : 'neutral';
+        return { colorCount, beadCount, dominantRatio, gridW, gridH, avgLightness, dominantHue };
+    }
+
+    function matchPersonality(stats) {
+        for (const p of BEAD_PERSONALITIES) {
+            if (p.rule(stats)) return p;
+        }
+        return BEAD_PERSONALITIES[BEAD_PERSONALITIES.length - 1];
+    }
+
+    const btnGeneratePersonality  = document.getElementById('btnGeneratePersonality');
+    const personalityModalEl      = document.getElementById('personalityModal');
+    const personalityCardCanvas   = document.getElementById('personalityCardCanvas');
+    const personalityThumb        = document.getElementById('personalityThumb');
+    const btnSavePersonalityCard  = document.getElementById('btnSavePersonalityCard');
     const btnSharePersonalityCard = document.getElementById('btnSharePersonalityCard');
-
     const personalityModal = personalityModalEl ? new bootstrap.Modal(personalityModalEl) : null;
-    let personalityImageSrc = null;
-    let personalityMode = 'quick';
-
-    // Mode toggle
-    document.querySelectorAll('.mode-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            personalityMode = btn.dataset.mode;
-            const descQuick = document.getElementById('modeDescQuick');
-            const descArt   = document.getElementById('modeDescArt');
-            if (descQuick) descQuick.classList.toggle('d-none', personalityMode !== 'quick');
-            if (descArt)   descArt.classList.toggle('d-none',   personalityMode !== 'art');
-        });
-    });
-
-    // Upload zone interactions
-    if (personalityUploadZone) {
-        personalityUploadZone.addEventListener('click', () => personalityFileInput && personalityFileInput.click());
-        personalityUploadZone.addEventListener('dragover', e => {
-            e.preventDefault();
-            personalityUploadZone.style.borderColor = 'rgba(255,255,255,0.7)';
-        });
-        personalityUploadZone.addEventListener('dragleave', () => {
-            personalityUploadZone.style.borderColor = '';
-        });
-        personalityUploadZone.addEventListener('drop', e => {
-            e.preventDefault();
-            personalityUploadZone.style.borderColor = '';
-            const file = e.dataTransfer.files[0];
-            if (file && file.type.startsWith('image/')) loadPersonalityImage(file);
-        });
-    }
-
-    if (personalityFileInput) {
-        personalityFileInput.addEventListener('change', e => {
-            const file = e.target.files[0];
-            if (file) loadPersonalityImage(file);
-        });
-    }
-
-    function loadPersonalityImage(file) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            personalityImageSrc = e.target.result;
-            if (personalityPreview) {
-                personalityPreview.src = personalityImageSrc;
-                personalityPreview.classList.remove('d-none');
-            }
-            if (personalityPlaceholder) personalityPlaceholder.style.display = 'none';
-            if (btnGeneratePersonality) btnGeneratePersonality.disabled = false;
-        };
-        reader.readAsDataURL(file);
-    }
-
-    async function pixelateForPersonality(imageSrc, mode) {
-        // Load source image
-        const img = new Image();
-        img.src = imageSrc;
-        await new Promise(r => { img.onload = r; img.onerror = r; });
-
-        // Art mode: posterize first (4 levels = cartoon-like)
-        let sourceEl = img;
-        if (mode === 'art') {
-            const tmpCanvas = document.createElement('canvas');
-            tmpCanvas.width  = img.naturalWidth;
-            tmpCanvas.height = img.naturalHeight;
-            const tmpCtx = tmpCanvas.getContext('2d');
-            tmpCtx.drawImage(img, 0, 0);
-            const imageData = tmpCtx.getImageData(0, 0, tmpCanvas.width, tmpCanvas.height);
-            const d = imageData.data;
-            const step = Math.floor(255 / 3); // 4 levels: 0, 85, 170, 255
-            for (let i = 0; i < d.length; i += 4) {
-                d[i]   = Math.round(d[i]   / step) * step;
-                d[i+1] = Math.round(d[i+1] / step) * step;
-                d[i+2] = Math.round(d[i+2] / step) * step;
-            }
-            tmpCtx.putImageData(imageData, 0, 0);
-            // pixelit needs HTMLImageElement, convert canvas to img
-            const posterizedImg = new Image();
-            posterizedImg.src = tmpCanvas.toDataURL('image/png');
-            await new Promise(r => { posterizedImg.onload = r; posterizedImg.onerror = r; });
-            sourceEl = posterizedImg;
-        }
-
-        // Pixelate with pixelit (scale=8, no labels, use current inventory palette)
-        const pxCanvas = document.createElement('canvas');
-        const px2 = new pixelit({
-            from: sourceEl,
-            to: pxCanvas,
-            scale: 8,
-            drawLabels: false,
-            palette: StorageService.getPaletteForPixelIt()
-        });
-        px2.pixelate({ returnGrid: true });
-
-        const imageBase64 = pxCanvas.toDataURL('image/png');
-
-        // Extract stats from grid
-        const grid = px2.getGrid();
-        let beadCount = 0, colorCount = 0, dominantColor = '#7ac8c0';
-        if (grid && grid.length > 0) {
-            const counts = Exporter.countColors(grid);
-            beadCount = counts.reduce((s, c) => s + c.count, 0);
-            colorCount = counts.length;
-            if (counts[0]) dominantColor = counts[0].hex;
-        }
-
-        return { imageBase64, beadCount, colorCount, dominantColor };
-    }
 
     if (btnGeneratePersonality) {
         btnGeneratePersonality.addEventListener('click', async () => {
-            if (!personalityImageSrc) return;
+            if (!currentGridResponse) return;
 
-            const originalHTML = btnGeneratePersonality.innerHTML;
+            const origHTML = btnGeneratePersonality.innerHTML;
             btnGeneratePersonality.innerHTML = '<span class="btn-spinner"></span>鉴定中...';
             btnGeneratePersonality.disabled = true;
-            track('personality_generate', { mode: personalityMode });
+            track('personality_generate');
 
             try {
-                // 1. Pixelate the uploaded photo
-                const stats = await pixelateForPersonality(personalityImageSrc, personalityMode);
+                // 1. 分析图纸，匹配人格
+                const stats = analyzeGridForPersonality(currentGridResponse);
+                const personality = matchPersonality(stats);
 
-                // 2. Call AI personality endpoint
+                // 2. 调用 AI 生成个性化解读（文本接口，无图，极快）
                 const resp = await fetch('/api/ai/personality', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        imageBase64: stats.imageBase64,
+                        typeCode: personality.code,
+                        typeName: personality.name,
+                        tagline:  personality.tagline,
                         beadCount: stats.beadCount,
                         colorCount: stats.colorCount
                     })
                 });
-                const aiResult = await resp.json();
-                if (!resp.ok) throw new Error(aiResult.error || 'AI 请求失败');
+                const aiData = await resp.json();
+                if (!resp.ok) throw new Error(aiData.error || 'AI 请求失败');
+                const comment = aiData.comment || '';
 
-                // 3. Generate the card canvas
-                const cardCanvas = await Exporter.generatePersonalityCard(stats.imageBase64, aiResult, stats);
+                // 3. 更新弹窗 HTML（MBTI 风格）
+                const header = document.getElementById('personalityModalHeader');
+                if (header) header.style.background = `linear-gradient(135deg, ${personality.grad[0]}, ${personality.grad[1]})`;
+                document.getElementById('personalityEmoji').textContent  = personality.emoji;
+                document.getElementById('personalityCode').textContent   = personality.code;
+                document.getElementById('personalityName').textContent   = personality.name;
+                document.getElementById('personalityTagline').textContent = personality.tagline;
+                document.getElementById('personalityComment').textContent = comment;
+                document.getElementById('statBeads').textContent  = stats.beadCount.toLocaleString() + ' 颗';
+                document.getElementById('statColors').textContent = stats.colorCount + ' 种';
 
-                // 4. Copy to modal canvas
-                if (personalityCardCanvas) {
-                    personalityCardCanvas.width  = cardCanvas.width;
-                    personalityCardCanvas.height = cardCanvas.height;
-                    personalityCardCanvas.getContext('2d').drawImage(cardCanvas, 0, 0);
+                // 4. 像素图缩略图
+                if (personalityThumb) {
+                    const pixelDataUrl = canvas.toDataURL('image/png');
+                    const thumbImg = new Image();
+                    thumbImg.onload = () => {
+                        personalityThumb.width  = thumbImg.naturalWidth;
+                        personalityThumb.height = thumbImg.naturalHeight;
+                        const tc = personalityThumb.getContext('2d');
+                        tc.imageSmoothingEnabled = false;
+                        tc.drawImage(thumbImg, 0, 0);
+                    };
+                    thumbImg.src = pixelDataUrl;
                 }
 
-                // 5. Show share button if supported
+                // 5. 生成导出用 canvas（后台，不阻塞弹窗显示）
+                if (personalityCardCanvas) {
+                    const pixelDataUrl = canvas.toDataURL('image/png');
+                    Exporter.generatePersonalityCard(pixelDataUrl, personality, comment, stats)
+                        .then(cardCanvas => {
+                            personalityCardCanvas.width  = cardCanvas.width;
+                            personalityCardCanvas.height = cardCanvas.height;
+                            personalityCardCanvas.getContext('2d').drawImage(cardCanvas, 0, 0);
+                        }).catch(console.error);
+                }
+
+                // 6. 分享按钮显示
                 if (btnSharePersonalityCard) {
                     btnSharePersonalityCard.style.display = navigator.canShare ? '' : 'none';
                 }
 
                 personalityModal && personalityModal.show();
-                track('personality_card_shown');
+                track('personality_card_shown', { type: personality.code });
             } catch (err) {
                 console.error(err);
                 alert('鉴定失败：' + (err.message || '未知错误'));
             } finally {
-                btnGeneratePersonality.innerHTML = originalHTML;
-                btnGeneratePersonality.disabled = !personalityImageSrc;
+                btnGeneratePersonality.innerHTML = origHTML;
+                btnGeneratePersonality.disabled = false;
             }
         });
     }
 
-    // Save card as PNG
+    // 保存图片
     if (btnSavePersonalityCard) {
         btnSavePersonalityCard.addEventListener('click', () => {
-            if (!personalityCardCanvas) return;
+            if (!personalityCardCanvas || !personalityCardCanvas.width) return;
             personalityCardCanvas.toBlob(blob => {
                 const link = document.createElement('a');
                 link.download = `我的拼豆人格_${Date.now()}.png`;
@@ -1598,12 +1577,12 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Share card via Web Share API
+    // 分享
     if (btnSharePersonalityCard) {
         btnSharePersonalityCard.addEventListener('click', async () => {
-            if (!personalityCardCanvas) return;
+            if (!personalityCardCanvas || !personalityCardCanvas.width) return;
             try {
-                personalityCardCanvas.toBlob(async (blob) => {
+                personalityCardCanvas.toBlob(async blob => {
                     const file = new File([blob], '我的拼豆人格.png', { type: 'image/png' });
                     if (navigator.canShare && navigator.canShare({ files: [file] })) {
                         await navigator.share({ files: [file], title: '我的拼豆人格', text: '测测你的拼豆人格！' });

@@ -180,176 +180,155 @@ const Exporter = {
     },
 
     /**
-     * Generate 1080x1080 personality card canvas
+     * Generate 1080x1080 personality card canvas (MBTI style)
      * @param {string} pixelImageBase64 - pixel art data URL
-     * @param {{personality:string, title:string, comment:string}} aiResult
-     * @param {{beadCount:number, colorCount:number, dominantColor:string}} stats
+     * @param {{code:string, name:string, emoji:string, tagline:string, grad:string[]}} personality
+     * @param {string} comment - AI generated personalized comment
+     * @param {{beadCount:number, colorCount:number}} stats
      * @returns {Promise<HTMLCanvasElement>}
      */
-    generatePersonalityCard: async (pixelImageBase64, aiResult, stats) => {
-        const SIZE = 1080;
+    generatePersonalityCard: async (pixelImageBase64, personality, comment, stats) => {
+        const W = 1080, H = 1080;
         const canvas = document.createElement('canvas');
-        canvas.width = SIZE;
-        canvas.height = SIZE;
+        canvas.width = W;
+        canvas.height = H;
         const ctx = canvas.getContext('2d');
 
-        // Polyfill roundRect for older browsers
-        const roundRect = (c, x, y, w, h, r) => {
+        const rr = (x, y, w, h, r) => {
             r = Math.min(r, w / 2, h / 2);
-            c.beginPath();
-            c.moveTo(x + r, y);
-            c.lineTo(x + w - r, y);
-            c.arcTo(x + w, y, x + w, y + r, r);
-            c.lineTo(x + w, y + h - r);
-            c.arcTo(x + w, y + h, x + w - r, y + h, r);
-            c.lineTo(x + r, y + h);
-            c.arcTo(x, y + h, x, y + h - r, r);
-            c.lineTo(x, y + r);
-            c.arcTo(x, y, x + r, y, r);
-            c.closePath();
+            ctx.beginPath();
+            ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y);
+            ctx.arcTo(x + w, y, x + w, y + r, r);
+            ctx.lineTo(x + w, y + h - r);
+            ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+            ctx.lineTo(x + r, y + h);
+            ctx.arcTo(x, y + h, x, y + h - r, r);
+            ctx.lineTo(x, y + r);
+            ctx.arcTo(x, y, x + r, y, r);
+            ctx.closePath();
         };
 
-        // Wait for fonts
         await document.fonts.ready;
 
-        // --- Background: deep dark gradient ---
-        const bgGrad = ctx.createLinearGradient(0, 0, SIZE, SIZE);
-        bgGrad.addColorStop(0, '#1a1a2e');
-        bgGrad.addColorStop(0.5, '#16213e');
-        bgGrad.addColorStop(1, '#0f3460');
-        ctx.fillStyle = bgGrad;
-        ctx.fillRect(0, 0, SIZE, SIZE);
+        const grad1 = personality.grad?.[0] || '#7a9e98';
+        const grad2 = personality.grad?.[1] || '#5d8880';
 
-        // --- Dot grid decoration ---
-        ctx.fillStyle = 'rgba(255,255,255,0.045)';
-        const DOT_SPACING = 40;
-        for (let x = DOT_SPACING; x < SIZE; x += DOT_SPACING) {
-            for (let y = DOT_SPACING; y < SIZE; y += DOT_SPACING) {
-                ctx.beginPath();
-                ctx.arc(x, y, 2.2, 0, Math.PI * 2);
-                ctx.fill();
+        // ── 背景（浅米色） ──
+        ctx.fillStyle = '#f5f2ee';
+        ctx.fillRect(0, 0, W, H);
+
+        // 顶部彩色条带
+        const TOP_H = 360;
+        const topGrad = ctx.createLinearGradient(0, 0, W, TOP_H);
+        topGrad.addColorStop(0, grad1);
+        topGrad.addColorStop(1, grad2);
+        ctx.fillStyle = topGrad;
+        ctx.fillRect(0, 0, W, TOP_H);
+
+        // 顶部点阵装饰
+        ctx.fillStyle = 'rgba(255,255,255,0.06)';
+        for (let x = 30; x < W; x += 38) {
+            for (let y = 20; y < TOP_H; y += 38) {
+                ctx.beginPath(); ctx.arc(x, y, 2, 0, Math.PI * 2); ctx.fill();
             }
         }
 
-        // --- Dominant color glow at top ---
-        const domColor = stats.dominantColor || '#7ac8c0';
-        const glowGrad = ctx.createRadialGradient(SIZE / 2, 0, 0, SIZE / 2, 0, SIZE * 0.6);
-        glowGrad.addColorStop(0, domColor + '44');
-        glowGrad.addColorStop(1, 'transparent');
-        ctx.fillStyle = glowGrad;
-        ctx.fillRect(0, 0, SIZE, SIZE);
+        // ── Emoji ──
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = '80px serif';
+        ctx.fillText(personality.emoji || '🟦', W / 2, 80);
 
-        // --- Polaroid frame ---
-        const CARD_W = 430;
-        const CARD_H = 430;
-        const CARD_X = (SIZE - CARD_W) / 2;
-        const CARD_Y = 65;
-
-        // Shadow
-        ctx.save();
-        ctx.shadowColor = 'rgba(0,0,0,0.6)';
-        ctx.shadowBlur = 48;
-        ctx.shadowOffsetY = 12;
+        // ── 人格代码 ──
+        ctx.font = 'bold 120px "Bebas Neue", "Arial Black", Impact, sans-serif';
         ctx.fillStyle = 'rgba(255,255,255,0.95)';
-        roundRect(ctx, CARD_X, CARD_Y, CARD_W, CARD_H, 14);
+        ctx.fillText(personality.code || 'PIXEL', W / 2, 215);
+
+        // ── 中文名称 ──
+        ctx.font = 'bold 38px "Noto Sans SC", "Microsoft YaHei", sans-serif';
+        ctx.fillStyle = 'rgba(255,255,255,0.88)';
+        ctx.fillText(personality.name || '标准像素人', W / 2, 300);
+
+        // ── 圆弧衔接（顶部底边→白色） ──
+        ctx.fillStyle = '#f5f2ee';
+        ctx.beginPath();
+        ctx.ellipse(W / 2, TOP_H + 30, W / 2 + 20, 50, 0, 0, Math.PI);
+        ctx.fill();
+
+        // ── 像素图（正方形，居中，悬浮在分界处） ──
+        const PIX_SIZE = 300;
+        const PIX_X = (W - PIX_SIZE) / 2;
+        const PIX_Y = TOP_H - 10;
+
+        ctx.save();
+        ctx.shadowColor = 'rgba(0,0,0,0.15)';
+        ctx.shadowBlur = 30;
+        ctx.shadowOffsetY = 10;
+        ctx.fillStyle = '#ffffff';
+        rr(PIX_X - 16, PIX_Y - 16, PIX_SIZE + 32, PIX_SIZE + 32, 16);
         ctx.fill();
         ctx.restore();
-
-        // White frame fill (clean, no shadow)
-        ctx.fillStyle = '#ffffff';
-        roundRect(ctx, CARD_X, CARD_Y, CARD_W, CARD_H, 14);
-        ctx.fill();
-
-        // Pixel art inside polaroid
-        const IMG_PAD = 14;
-        const IMG_BOTTOM = 68; // space at bottom for polaroid label
-        const IMG_W = CARD_W - IMG_PAD * 2;
-        const IMG_H = CARD_H - IMG_PAD - IMG_BOTTOM;
-        const IMG_X = CARD_X + IMG_PAD;
-        const IMG_Y = CARD_Y + IMG_PAD;
 
         const pixelImg = new Image();
         pixelImg.src = pixelImageBase64;
-        await new Promise(resolve => {
-            pixelImg.onload = resolve;
-            pixelImg.onerror = resolve;
-        });
-
+        await new Promise(r => { pixelImg.onload = r; pixelImg.onerror = r; });
         ctx.save();
-        roundRect(ctx, IMG_X, IMG_Y, IMG_W, IMG_H, 6);
+        rr(PIX_X, PIX_Y, PIX_SIZE, PIX_SIZE, 8);
         ctx.clip();
-        ctx.imageSmoothingEnabled = false; // keep pixels crisp
-        ctx.drawImage(pixelImg, IMG_X, IMG_Y, IMG_W, IMG_H);
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(pixelImg, PIX_X, PIX_Y, PIX_SIZE, PIX_SIZE);
         ctx.restore();
 
-        // Polaroid label area
-        ctx.fillStyle = '#555';
-        ctx.font = 'bold 20px "Noto Sans SC", "Microsoft YaHei", sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('我的拼豆作品', CARD_X + CARD_W / 2, CARD_Y + CARD_H - 32);
-
-        // --- Personality code (Bebas Neue, big) ---
-        const PERS_Y = CARD_Y + CARD_H + 90;
+        // ── 标语 ──
+        const TAG_Y = PIX_Y + PIX_SIZE + 52;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'alphabetic';
+        ctx.font = 'bold 26px "Noto Sans SC", "Microsoft YaHei", sans-serif';
+        ctx.fillStyle = grad1;
+        ctx.fillText(personality.tagline || '', W / 2, TAG_Y);
 
-        const textGrad = ctx.createLinearGradient(SIZE * 0.2, 0, SIZE * 0.8, 0);
-        textGrad.addColorStop(0, '#7ac8c0');
-        textGrad.addColorStop(1, '#e8a5a0');
-        ctx.fillStyle = textGrad;
-        ctx.font = 'bold 108px "Bebas Neue", "Arial Black", Impact, sans-serif';
-        ctx.fillText(aiResult.personality || 'PIXEL', SIZE / 2, PERS_Y);
-
-        // --- Title ---
-        ctx.fillStyle = 'rgba(255,255,255,0.92)';
-        ctx.font = 'bold 30px "Noto Sans SC", "Microsoft YaHei", sans-serif';
-        ctx.fillText(aiResult.title || '拼豆爱好者', SIZE / 2, PERS_Y + 56);
-
-        // --- Comment (word wrap at 22 chars) ---
-        ctx.fillStyle = 'rgba(255,255,255,0.60)';
-        ctx.font = '22px "Noto Sans SC", "Microsoft YaHei", sans-serif';
-        const comment = aiResult.comment || '';
-        const MAX_COMMENT_LINE = 22;
-        if (comment.length <= MAX_COMMENT_LINE) {
-            ctx.fillText(comment, SIZE / 2, PERS_Y + 106);
+        // ── AI 解读（换行，每行≤20字） ──
+        ctx.fillStyle = '#6b6560';
+        ctx.font = '24px "Noto Sans SC", "Microsoft YaHei", sans-serif';
+        const MAX_LINE = 20;
+        const COM_Y = TAG_Y + 50;
+        if (comment.length <= MAX_LINE) {
+            ctx.fillText(comment, W / 2, COM_Y);
         } else {
-            ctx.fillText(comment.slice(0, MAX_COMMENT_LINE), SIZE / 2, PERS_Y + 102);
-            ctx.fillText(comment.slice(MAX_COMMENT_LINE), SIZE / 2, PERS_Y + 132);
+            ctx.fillText(comment.slice(0, MAX_LINE), W / 2, COM_Y);
+            ctx.fillText(comment.slice(MAX_LINE), W / 2, COM_Y + 36);
         }
 
-        // --- Divider line ---
-        const DIV_Y = PERS_Y + 168;
-        ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+        // ── 分隔线 ──
+        const DIV_Y = COM_Y + 80;
+        ctx.strokeStyle = 'rgba(0,0,0,0.08)';
         ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.moveTo(SIZE * 0.15, DIV_Y);
-        ctx.lineTo(SIZE * 0.85, DIV_Y);
+        ctx.moveTo(W * 0.12, DIV_Y); ctx.lineTo(W * 0.88, DIV_Y);
         ctx.stroke();
 
-        // --- Stats row ---
-        const STATS_Y = DIV_Y + 60;
+        // ── 数据行 ──
+        const STAT_Y = DIV_Y + 62;
         const statItems = [
-            { label: '拼豆总量', value: (stats.beadCount || 0).toLocaleString() },
+            { label: '豆子总量', value: (stats.beadCount || 0).toLocaleString() },
             { label: '颜色种数', value: String(stats.colorCount || 0) },
-            { label: '像素感值', value: '100%' }
+            { label: '人格代码', value: personality.code || 'PIXEL' }
         ];
-        const statW = SIZE / 3;
-        ctx.textBaseline = 'alphabetic';
+        const SW = W / 3;
         statItems.forEach((item, i) => {
-            const x = statW * i + statW / 2;
-            ctx.fillStyle = domColor;
-            ctx.font = 'bold 38px "Bebas Neue", "Arial Black", Impact, sans-serif';
-            ctx.fillText(item.value, x, STATS_Y);
-            ctx.fillStyle = 'rgba(255,255,255,0.40)';
-            ctx.font = '18px "Noto Sans SC", "Microsoft YaHei", sans-serif';
-            ctx.fillText(item.label, x, STATS_Y + 30);
+            const x = SW * i + SW / 2;
+            ctx.fillStyle = (i % 2 === 0) ? grad1 : grad2;
+            ctx.font = 'bold 42px "Bebas Neue", "Arial Black", Impact, sans-serif';
+            ctx.fillText(item.value, x, STAT_Y);
+            ctx.fillStyle = '#999';
+            ctx.font = '20px "Noto Sans SC", "Microsoft YaHei", sans-serif';
+            ctx.fillText(item.label, x, STAT_Y + 34);
         });
 
-        // --- Branding ---
-        ctx.fillStyle = 'rgba(255,255,255,0.25)';
-        ctx.font = '18px "Noto Sans SC", "Microsoft YaHei", sans-serif';
-        ctx.fillText('PixelBeads 拼豆助手', SIZE / 2, SIZE - 38);
+        // ── 品牌 ──
+        ctx.fillStyle = '#bbb';
+        ctx.font = '20px "Noto Sans SC", "Microsoft YaHei", sans-serif';
+        ctx.fillText('PixelBeads 拼豆助手', W / 2, H - 36);
 
         return canvas;
     }
