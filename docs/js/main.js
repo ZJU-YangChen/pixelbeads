@@ -1514,8 +1514,7 @@ document.addEventListener('DOMContentLoaded', () => {
             drawLabels: false,
             palette: StorageService.getPaletteForPixelIt()
         });
-        px2.pixelate();
-        px2.convertPalette();
+        px2.pixelate({ returnGrid: true });
 
         const imageBase64 = pxCanvas.toDataURL('image/png');
 
