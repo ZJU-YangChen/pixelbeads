@@ -1407,6 +1407,218 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // ===== 拼豆人格测试 =====
+
+    const personalityUploadZone  = document.getElementById('personalityUploadZone');
+    const personalityFileInput   = document.getElementById('personalityFileInput');
+    const personalityPreview     = document.getElementById('personalityPreview');
+    const personalityPlaceholder = document.getElementById('personalityPlaceholder');
+    const btnGeneratePersonality = document.getElementById('btnGeneratePersonality');
+    const personalityModalEl     = document.getElementById('personalityModal');
+    const personalityCardCanvas  = document.getElementById('personalityCardCanvas');
+    const btnSavePersonalityCard = document.getElementById('btnSavePersonalityCard');
+    const btnSharePersonalityCard = document.getElementById('btnSharePersonalityCard');
+
+    const personalityModal = personalityModalEl ? new bootstrap.Modal(personalityModalEl) : null;
+    let personalityImageSrc = null;
+    let personalityMode = 'quick';
+
+    // Mode toggle
+    document.querySelectorAll('.mode-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            personalityMode = btn.dataset.mode;
+            const descQuick = document.getElementById('modeDescQuick');
+            const descArt   = document.getElementById('modeDescArt');
+            if (descQuick) descQuick.classList.toggle('d-none', personalityMode !== 'quick');
+            if (descArt)   descArt.classList.toggle('d-none',   personalityMode !== 'art');
+        });
+    });
+
+    // Upload zone interactions
+    if (personalityUploadZone) {
+        personalityUploadZone.addEventListener('click', () => personalityFileInput && personalityFileInput.click());
+        personalityUploadZone.addEventListener('dragover', e => {
+            e.preventDefault();
+            personalityUploadZone.style.borderColor = 'rgba(255,255,255,0.7)';
+        });
+        personalityUploadZone.addEventListener('dragleave', () => {
+            personalityUploadZone.style.borderColor = '';
+        });
+        personalityUploadZone.addEventListener('drop', e => {
+            e.preventDefault();
+            personalityUploadZone.style.borderColor = '';
+            const file = e.dataTransfer.files[0];
+            if (file && file.type.startsWith('image/')) loadPersonalityImage(file);
+        });
+    }
+
+    if (personalityFileInput) {
+        personalityFileInput.addEventListener('change', e => {
+            const file = e.target.files[0];
+            if (file) loadPersonalityImage(file);
+        });
+    }
+
+    function loadPersonalityImage(file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            personalityImageSrc = e.target.result;
+            if (personalityPreview) {
+                personalityPreview.src = personalityImageSrc;
+                personalityPreview.classList.remove('d-none');
+            }
+            if (personalityPlaceholder) personalityPlaceholder.style.display = 'none';
+            if (btnGeneratePersonality) btnGeneratePersonality.disabled = false;
+        };
+        reader.readAsDataURL(file);
+    }
+
+    async function pixelateForPersonality(imageSrc, mode) {
+        // Load source image
+        const img = new Image();
+        img.src = imageSrc;
+        await new Promise(r => { img.onload = r; img.onerror = r; });
+
+        // Art mode: posterize first (4 levels = cartoon-like)
+        let sourceEl = img;
+        if (mode === 'art') {
+            const tmpCanvas = document.createElement('canvas');
+            tmpCanvas.width  = img.naturalWidth;
+            tmpCanvas.height = img.naturalHeight;
+            const tmpCtx = tmpCanvas.getContext('2d');
+            tmpCtx.drawImage(img, 0, 0);
+            const imageData = tmpCtx.getImageData(0, 0, tmpCanvas.width, tmpCanvas.height);
+            const d = imageData.data;
+            const step = Math.floor(255 / 3); // 4 levels: 0, 85, 170, 255
+            for (let i = 0; i < d.length; i += 4) {
+                d[i]   = Math.round(d[i]   / step) * step;
+                d[i+1] = Math.round(d[i+1] / step) * step;
+                d[i+2] = Math.round(d[i+2] / step) * step;
+            }
+            tmpCtx.putImageData(imageData, 0, 0);
+            // pixelit needs HTMLImageElement, convert canvas to img
+            const posterizedImg = new Image();
+            posterizedImg.src = tmpCanvas.toDataURL('image/png');
+            await new Promise(r => { posterizedImg.onload = r; posterizedImg.onerror = r; });
+            sourceEl = posterizedImg;
+        }
+
+        // Pixelate with pixelit (scale=8, no labels, use current inventory palette)
+        const pxCanvas = document.createElement('canvas');
+        const px2 = new pixelit({
+            from: sourceEl,
+            to: pxCanvas,
+            scale: 8,
+            drawLabels: false,
+            palette: StorageService.getPaletteForPixelIt()
+        });
+        px2.pixelate();
+        px2.convertPalette();
+
+        const imageBase64 = pxCanvas.toDataURL('image/png');
+
+        // Extract stats from grid
+        const grid = px2.getGrid();
+        let beadCount = 0, colorCount = 0, dominantColor = '#7ac8c0';
+        if (grid && grid.length > 0) {
+            const counts = Exporter.countColors(grid);
+            beadCount = counts.reduce((s, c) => s + c.count, 0);
+            colorCount = counts.length;
+            if (counts[0]) dominantColor = counts[0].hex;
+        }
+
+        return { imageBase64, beadCount, colorCount, dominantColor };
+    }
+
+    if (btnGeneratePersonality) {
+        btnGeneratePersonality.addEventListener('click', async () => {
+            if (!personalityImageSrc) return;
+
+            const originalHTML = btnGeneratePersonality.innerHTML;
+            btnGeneratePersonality.innerHTML = '<span class="btn-spinner"></span>鉴定中...';
+            btnGeneratePersonality.disabled = true;
+            track('personality_generate', { mode: personalityMode });
+
+            try {
+                // 1. Pixelate the uploaded photo
+                const stats = await pixelateForPersonality(personalityImageSrc, personalityMode);
+
+                // 2. Call AI personality endpoint
+                const resp = await fetch('/api/ai/personality', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        imageBase64: stats.imageBase64,
+                        beadCount: stats.beadCount,
+                        colorCount: stats.colorCount
+                    })
+                });
+                const aiResult = await resp.json();
+                if (!resp.ok) throw new Error(aiResult.error || 'AI 请求失败');
+
+                // 3. Generate the card canvas
+                const cardCanvas = await Exporter.generatePersonalityCard(stats.imageBase64, aiResult, stats);
+
+                // 4. Copy to modal canvas
+                if (personalityCardCanvas) {
+                    personalityCardCanvas.width  = cardCanvas.width;
+                    personalityCardCanvas.height = cardCanvas.height;
+                    personalityCardCanvas.getContext('2d').drawImage(cardCanvas, 0, 0);
+                }
+
+                // 5. Show share button if supported
+                if (btnSharePersonalityCard) {
+                    btnSharePersonalityCard.style.display = navigator.canShare ? '' : 'none';
+                }
+
+                personalityModal && personalityModal.show();
+                track('personality_card_shown');
+            } catch (err) {
+                console.error(err);
+                alert('鉴定失败：' + (err.message || '未知错误'));
+            } finally {
+                btnGeneratePersonality.innerHTML = originalHTML;
+                btnGeneratePersonality.disabled = !personalityImageSrc;
+            }
+        });
+    }
+
+    // Save card as PNG
+    if (btnSavePersonalityCard) {
+        btnSavePersonalityCard.addEventListener('click', () => {
+            if (!personalityCardCanvas) return;
+            personalityCardCanvas.toBlob(blob => {
+                const link = document.createElement('a');
+                link.download = `我的拼豆人格_${Date.now()}.png`;
+                link.href = URL.createObjectURL(blob);
+                link.click();
+            });
+            track('personality_save');
+        });
+    }
+
+    // Share card via Web Share API
+    if (btnSharePersonalityCard) {
+        btnSharePersonalityCard.addEventListener('click', async () => {
+            if (!personalityCardCanvas) return;
+            try {
+                personalityCardCanvas.toBlob(async (blob) => {
+                    const file = new File([blob], '我的拼豆人格.png', { type: 'image/png' });
+                    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                        await navigator.share({ files: [file], title: '我的拼豆人格', text: '测测你的拼豆人格！' });
+                        track('personality_share');
+                    } else {
+                        alert('当前浏览器不支持直接分享，请使用保存按钮。');
+                    }
+                });
+            } catch (err) {
+                if (err.name !== 'AbortError') alert('分享失败：' + err.message);
+            }
+        });
+    }
+
     // Boot
     // init();
     loginModal.show();

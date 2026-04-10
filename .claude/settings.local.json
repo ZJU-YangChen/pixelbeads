@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//Users/c6gvqb/**)",
+      "Read(//c/Users/23361/Desktop/**)"
+    ]
+  }
+}

@@ -421,6 +421,70 @@ app.post('/api/ai/extract-colorcard', async (req, res) => {
     }
 });
 
+// --- 拼豆人格鉴定 ---
+
+app.post('/api/ai/personality', async (req, res) => {
+    const apiKey = process.env.QWEN_API_KEY;
+    if (!apiKey) return res.status(503).json({ error: 'QWEN_API_KEY 未配置' });
+
+    const { imageBase64, beadCount, colorCount } = req.body;
+    if (!imageBase64) return res.status(400).json({ error: '缺少 imageBase64' });
+
+    const prompt = `你是一位充满创意和幽默感的拼豆人格测评师。
+根据这张拼豆风格的像素图，为用户生成一个专属"拼豆人格"。
+
+输出规则（严格遵守）：
+1. personality：2-6个大写英文字母或连字符组成的人格代码，例如"PIXEL"、"CRAFTY"、"ART-IST"
+2. title：4-8个中文字，人格称号，例如"像素艺术大师"、"颜色捕手"
+3. comment：15-30个中文字，一句风趣有网络感的人格解读
+
+只输出JSON，不要解释，不要markdown代码块：
+{"personality":"PIXEL","title":"像素艺术家","comment":"你的眼里只有像素，生活不过是一张大网格！"}`;
+
+    try {
+        const response = await fetch('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                model: 'qwen-vl-plus',
+                messages: [{
+                    role: 'user',
+                    content: [
+                        { type: 'image_url', image_url: { url: imageBase64 } },
+                        { type: 'text', text: prompt }
+                    ]
+                }],
+                max_tokens: 300
+            })
+        });
+
+        if (!response.ok) {
+            const errText = await response.text();
+            return res.status(502).json({ error: `Qwen API 错误 (${response.status}): ${errText}` });
+        }
+
+        const data = await response.json();
+        const rawText = (data.choices?.[0]?.message?.content || '').trim();
+
+        const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) {
+            return res.status(502).json({ error: 'AI 返回格式异常', raw: rawText.slice(0, 200) });
+        }
+
+        const parsed = JSON.parse(jsonMatch[0]);
+        const personality = (parsed.personality || 'PIXEL').toUpperCase().replace(/[^A-Z-]/g, '').slice(0, 10) || 'PIXEL';
+        const title = String(parsed.title || '拼豆爱好者').slice(0, 12);
+        const comment = String(parsed.comment || '你是一个热爱拼豆的创意之人！').slice(0, 60);
+
+        res.json({ personality, title, comment });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // --- Events API ---
 
 app.post('/api/events', async (req, res) => {

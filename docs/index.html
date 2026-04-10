@@ -13,6 +13,7 @@
         gtag('config', 'G-28V6C6FTW9');
     </script>
     <link href="css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.loli.net/css2?family=Bebas+Neue&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
     <style>
         /* ===== 色彩变量 ===== */
         :root {
@@ -553,6 +554,134 @@
             .canvas-container { min-height: 160px; }
         }
     </style>
+
+    <style>
+        /* ===== 拼豆人格英雄区 ===== */
+        .personality-hero {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            padding: 48px 0 40px;
+            position: relative;
+            overflow: hidden;
+        }
+        .personality-hero::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background:
+                radial-gradient(circle at 20% 60%, rgba(122,200,192,0.15) 0%, transparent 50%),
+                radial-gradient(circle at 80% 20%, rgba(232,165,160,0.12) 0%, transparent 40%);
+            pointer-events: none;
+        }
+        .hero-badge {
+            display: inline-block;
+            background: rgba(255,255,255,0.10);
+            color: rgba(255,255,255,0.80);
+            border: 1px solid rgba(255,255,255,0.20);
+            border-radius: 20px;
+            padding: 3px 14px;
+            font-size: 0.78rem;
+            margin-bottom: 10px;
+            letter-spacing: 0.05em;
+        }
+        .hero-title {
+            font-size: 2rem;
+            font-weight: 800;
+            color: #fff;
+            margin-bottom: 8px;
+        }
+        .hero-title .hl {
+            background: linear-gradient(90deg, #7ac8c0, #e8a5a0);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .hero-sub {
+            color: rgba(255,255,255,0.60);
+            font-size: 0.95rem;
+        }
+        .mode-toggle {
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 40px;
+            padding: 4px;
+            display: inline-flex;
+            gap: 4px;
+        }
+        .mode-btn {
+            background: transparent;
+            border: none;
+            color: rgba(255,255,255,0.60);
+            border-radius: 36px;
+            padding: 7px 22px;
+            font-size: 0.88rem;
+            cursor: pointer;
+            transition: background 0.2s, color 0.2s;
+        }
+        .mode-btn.active {
+            background: rgba(255,255,255,0.18);
+            color: #fff;
+            font-weight: 600;
+        }
+        .personality-upload-zone {
+            max-width: 300px;
+            height: 210px;
+            border: 2px dashed rgba(255,255,255,0.28);
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: border-color 0.25s, background 0.25s;
+            background: rgba(255,255,255,0.06);
+            text-align: center;
+            color: rgba(255,255,255,0.80);
+            position: relative;
+            overflow: hidden;
+        }
+        .personality-upload-zone:hover {
+            border-color: rgba(255,255,255,0.55);
+            background: rgba(255,255,255,0.10);
+        }
+        .personality-upload-zone .pu-placeholder {
+            padding: 20px;
+        }
+        .personality-upload-zone .upload-emoji {
+            font-size: 2.6rem;
+            margin-bottom: 8px;
+            display: block;
+        }
+        #personalityPreview {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 18px;
+        }
+        .btn-personality {
+            background: linear-gradient(135deg, #7ac8c0 0%, #e8a5a0 100%);
+            color: #fff;
+            font-weight: 700;
+            font-size: 1.05rem;
+            border: none;
+            border-radius: 50px;
+            padding: 12px 36px;
+            box-shadow: 0 4px 24px rgba(122,200,192,0.4);
+            transition: transform 0.2s, box-shadow 0.2s;
+            letter-spacing: 0.02em;
+        }
+        .btn-personality:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 32px rgba(122,200,192,0.55);
+            color: #fff;
+        }
+        .btn-personality:disabled { opacity: 0.45; cursor: not-allowed; }
+        .mode-desc { color: rgba(255,255,255,0.55); font-size: 0.82rem; min-height: 1.2em; }
+        @media (max-width: 576px) {
+            .hero-title { font-size: 1.5rem; }
+            .btn-personality { font-size: 0.9rem; padding: 10px 24px; }
+        }
+    </style>
 </head>
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark mb-3">
@@ -567,6 +696,47 @@
             </div>
         </div>
     </nav>
+
+    <!-- ✨ 拼豆人格英雄区 -->
+    <section class="personality-hero" id="personalityHero">
+        <div class="container position-relative">
+            <div class="text-center mb-4">
+                <div class="hero-badge">✨ AI 拼豆人格鉴定</div>
+                <h2 class="hero-title">上传你的近期爱照，测测你的<span class="hl">拼豆人格</span></h2>
+                <p class="hero-sub">AI 分析你的像素灵魂，生成专属人格卡，分享给朋友</p>
+            </div>
+
+            <!-- Mode Toggle -->
+            <div class="d-flex justify-content-center mb-3">
+                <div class="mode-toggle">
+                    <button class="mode-btn active" id="modeQuick" data-mode="quick">⚡ 极速像素</button>
+                    <button class="mode-btn" id="modeArt" data-mode="art">🎨 艺术滤镜</button>
+                </div>
+            </div>
+            <div class="text-center mb-4">
+                <span class="mode-desc" id="modeDescQuick">直接像素化照片，保留原色精髓</span>
+                <span class="mode-desc d-none" id="modeDescArt">卡通化处理后再像素化，更有拼豆感</span>
+            </div>
+
+            <!-- Upload Zone -->
+            <div class="personality-upload-zone mx-auto mb-4" id="personalityUploadZone">
+                <div class="pu-placeholder" id="personalityPlaceholder">
+                    <span class="upload-emoji">📸</span>
+                    <div class="fw-semibold mb-1">点击选择照片 / 拖拽到这里</div>
+                    <div class="small opacity-75">建议正方形照片，人像/风景均可</div>
+                </div>
+                <img id="personalityPreview" class="d-none" alt="预览">
+                <input type="file" id="personalityFileInput" accept="image/*" class="d-none">
+            </div>
+
+            <!-- Generate Button -->
+            <div class="text-center">
+                <button class="btn btn-personality" id="btnGeneratePersonality" disabled>
+                    🔮 鉴定我的拼豆人格
+                </button>
+            </div>
+        </div>
+    </section>
 
     <div class="container">
 
@@ -1038,13 +1208,32 @@
         </div>
     </div>
 
+    <!-- Personality Result Modal -->
+    <div class="modal fade" id="personalityModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered" style="max-width: 480px;">
+            <div class="modal-content border-0" style="background: #1a1a2e; border-radius: 20px;">
+                <div class="modal-header border-0 pb-0">
+                    <h5 class="modal-title text-white fw-bold">✨ 你的拼豆人格</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body text-center pt-2 pb-4">
+                    <canvas id="personalityCardCanvas" class="rounded-3 shadow" style="max-width: 100%; width: 100%;"></canvas>
+                    <div class="d-flex gap-2 justify-content-center mt-3">
+                        <button class="btn btn-light rounded-pill px-4 fw-bold" id="btnSavePersonalityCard">💾 保存图片</button>
+                        <button class="btn rounded-pill px-4 fw-bold" id="btnSharePersonalityCard" style="background: linear-gradient(135deg,#7ac8c0,#e8a5a0); color:#fff; display:none;">📤 分享</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Scripts -->
     <script src="js/bootstrap.bundle.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-    <script src="js/storage.js?v=20260410"></script>
-    <script src="js/pixelit.js?v=20260410"></script>
-    <script src="js/exporter.js?v=20260410"></script>
-    <script src="js/inventory-import.js?v=20260410"></script>
-    <script src="js/main.js?v=20260410"></script>
+    <script src="js/storage.js?v=20260411"></script>
+    <script src="js/pixelit.js?v=20260411"></script>
+    <script src="js/exporter.js?v=20260411"></script>
+    <script src="js/inventory-import.js?v=20260411"></script>
+    <script src="js/main.js?v=20260411"></script>
 </body>
 </html>
