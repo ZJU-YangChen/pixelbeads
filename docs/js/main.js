@@ -322,9 +322,16 @@ document.addEventListener('DOMContentLoaded', () => {
         inventoryTableBody.innerHTML = '';
         
         inventory.forEach((item, index) => {
+            // 商家色号：优先用 bead_id，其次用 id（限制长度截断显示）
+            const beadLabel = (item.bead_id != null ? String(item.bead_id) : String(item.id || ''));
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td class="align-middle"><span class="color-box" style="background-color: ${item.hex};"></span></td>
+                <td class="align-middle">
+                  <div class="color-swatch-wrap">
+                    <span class="color-box" style="background-color: ${item.hex};"></span>
+                    ${beadLabel ? `<span class="color-swatch-label" title="${beadLabel}">${beadLabel}</span>` : ''}
+                  </div>
+                </td>
                 <td class="align-middle">${item.name}</td>
                 <td class="align-middle">${item.hex}</td>
                 <td class="align-middle">${item.id}</td>
@@ -992,10 +999,14 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // 1. Color Box
             const colorTd = document.createElement('td');
+            const swatchWrap = document.createElement('div');
+            swatchWrap.className = 'color-swatch-wrap';
+            swatchWrap.style.margin = '0 auto';
+
             const colorBox = document.createElement('div');
-            colorBox.style.cssText = `width: 24px; height: 24px; background-color: ${c.hex}; border: 1px solid #ccc; cursor: pointer;`;
+            colorBox.style.cssText = `width: 24px; height: 24px; background-color: ${c.hex}; border: 1px solid #ccc; cursor: pointer; border-radius: 5px;`;
             colorBox.title = "点击吸取颜色";
-            
+
             colorBox.onclick = () => {
                 // Fix: ensure we store simple RGB object for pixelit
                 // Ensure it's compatible with px.updatePixel: expects {r, g, b, a?} or [r,g,b] depending on version
@@ -1012,8 +1023,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 const brushUI = document.getElementById('currentBrushColor');
                 if (brushUI) brushUI.style.backgroundColor = c.hex;
             };
-            
-            colorTd.appendChild(colorBox);
+
+            swatchWrap.appendChild(colorBox);
+
+            // 色号标签
+            if (invItem) {
+                const swatchLabel = document.createElement('span');
+                swatchLabel.className = 'color-swatch-label';
+                const beadLabel = invItem.bead_id != null ? String(invItem.bead_id) : String(invItem.id || '');
+                if (beadLabel) {
+                    swatchLabel.textContent = beadLabel;
+                    swatchLabel.title = beadLabel;
+                    swatchWrap.appendChild(swatchLabel);
+                }
+            }
+
+            colorTd.appendChild(swatchWrap);
             tr.appendChild(colorTd);
 
             // 2. Name
