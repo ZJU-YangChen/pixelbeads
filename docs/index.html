@@ -777,6 +777,7 @@
         <div class="drawer-header">
             <span>📦 豆子库存管理</span>
             <div class="d-flex gap-2 align-items-center">
+                <button class="btn btn-sm btn-outline-primary" id="batchImportBtn">📥 批量导入</button>
                 <button class="btn btn-sm btn-primary" id="addBeadBtn">+ 添加颜色</button>
                 <button class="btn-close" id="closeInventoryDrawer"></button>
             </div>
@@ -927,6 +928,80 @@
         </div>
     </div>
 
+    <!-- Inventory Import Modal -->
+    <div class="modal fade" id="inventoryImportModal" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header" style="background: linear-gradient(135deg, var(--mo-primary) 0%, var(--mo-primary-dark) 100%); color: white;">
+                    <h5 class="modal-title fw-bold" id="importModalTitle">批量导入豆子库存</h5>
+                </div>
+                <div class="modal-body">
+
+                    <!-- 选项切换 -->
+                    <div class="d-flex gap-4 mb-3 flex-wrap">
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="importOption" id="importOptMard" value="mard" checked>
+                            <label class="form-check-label fw-semibold" for="importOptMard">📦 品牌色卡（mard 预设）</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="importOption" id="importOptUpload" value="upload">
+                            <label class="form-check-label fw-semibold" for="importOptUpload">📷 上传色卡（AI 识别）</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="importOption" id="importOptDefault" value="default">
+                            <label class="form-check-label fw-semibold" for="importOptDefault">🎨 使用系统默认配色</label>
+                        </div>
+                    </div>
+
+                    <!-- 共享数量行（default 时隐藏） -->
+                    <div id="qtySection" class="d-flex align-items-center gap-2 mb-3 p-2 rounded" style="background: rgba(121,152,166,0.08);">
+                        <span class="small fw-semibold">每种颜色初始数量：</span>
+                        <input type="number" class="form-control form-control-sm" id="importDefaultQty" value="1000" min="1" style="width: 100px;">
+                        <span class="text-muted small">颗</span>
+                    </div>
+
+                    <!-- mard 套餐面板 -->
+                    <div id="mardPanel">
+                        <div class="d-flex align-items-center gap-3 mb-2 flex-wrap">
+                            <label class="fw-semibold small mb-0">套餐规格：</label>
+                            <select class="form-select form-select-sm" id="mardPackageSelect" style="width: auto;">
+                                <option value="24">24色套装</option>
+                                <option value="48">48色套装</option>
+                                <option value="72">72色套装</option>
+                                <option value="96" selected>96色套装</option>
+                                <option value="120">120色套装</option>
+                                <option value="144">144色套装</option>
+                                <option value="216">216色全套</option>
+                            </select>
+                            <span class="badge rounded-pill" style="background: var(--mo-primary); font-size: 0.78rem;" id="mardColorCount">0 种颜色</span>
+                        </div>
+                        <div id="mardPreviewGrid" class="d-flex flex-wrap gap-1 p-2 border rounded" style="max-height: 180px; overflow-y: auto; background: #fafaf8;"></div>
+                    </div>
+
+                    <!-- 上传色卡面板 -->
+                    <div id="uploadPanel" class="d-none">
+                        <p class="text-muted small mb-2">上传品牌色卡图片，AI 将自动识别颜色并提取色号。</p>
+                        <input type="file" class="form-control form-control-sm mb-2" id="colorCardUpload" accept="image/*">
+                        <div id="uploadStatusMsg" class="small mb-2"></div>
+                        <div id="uploadPreviewGrid" class="d-flex flex-wrap gap-1 p-2 border rounded" style="max-height: 180px; overflow-y: auto; background: #fafaf8; min-height: 36px;"></div>
+                    </div>
+
+                    <!-- 默认配色面板 -->
+                    <div id="defaultPanel" class="d-none">
+                        <div class="alert alert-info py-2 small mb-0">
+                            将使用系统内置的 256 种 Web 标准色作为初始库存，适合不确定品牌或需要高保真配色的用户。
+                        </div>
+                        <input type="hidden" id="importDefaultQtyDef" value="1000">
+                    </div>
+                </div>
+                <div class="modal-footer justify-content-between">
+                    <button type="button" class="btn btn-outline-secondary rounded-pill" id="importSkipBtn">取消</button>
+                    <button type="button" class="btn btn-primary rounded-pill px-4 fw-bold" id="importConfirmBtn">确认导入</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Add Bead Modal -->
     <div class="modal fade" id="addBeadModal" tabindex="-1">
         <div class="modal-dialog">
@@ -969,6 +1044,7 @@
     <script src="js/storage.js?v=20260410"></script>
     <script src="js/pixelit.js?v=20260410"></script>
     <script src="js/exporter.js?v=20260410"></script>
+    <script src="js/inventory-import.js?v=20260410"></script>
     <script src="js/main.js?v=20260410"></script>
 </body>
 </html>

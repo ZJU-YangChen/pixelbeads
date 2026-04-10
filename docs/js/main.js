@@ -7,6 +7,9 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
     }
 
+    // 初始化库存导入模块
+    InventoryImport.init();
+
     // Elements - Studio
     const fileInput = document.getElementById('fileInput');
     const sourceImage = document.getElementById('sourceImage');
@@ -63,6 +66,20 @@ document.addEventListener('DOMContentLoaded', () => {
         userDisplay.innerText = `👤 ${user.username}`;
         logoutBtn.style.display = 'block';
         init(); // Start App
+
+        // 新用户首次登录 → 弹出库存初始化向导
+        const setupKey = `setup_done_${user.id}`;
+        if (!localStorage.getItem(setupKey)) {
+            setTimeout(() => {
+                InventoryImport.open({
+                    isNew: true,
+                    onDone: (result, count) => {
+                        renderInventoryTable();
+                        if (paletteSelect.value === 'my_inventory') updatePalette();
+                    }
+                });
+            }, 450); // 等待登录弹窗完全关闭
+        }
     };
 
     loginForm.addEventListener('submit', async (e) => {
@@ -176,6 +193,21 @@ document.addEventListener('DOMContentLoaded', () => {
     if (closeInvBtn) closeInvBtn.addEventListener('click', closeAllDrawers);
     if (closeHisBtn) closeHisBtn.addEventListener('click', closeAllDrawers);
     if (drawerOverlay) drawerOverlay.addEventListener('click', closeAllDrawers);
+
+    // 库存抽屉：批量导入按钮
+    const batchImportBtn = document.getElementById('batchImportBtn');
+    if (batchImportBtn) {
+        batchImportBtn.addEventListener('click', () => {
+            closeAllDrawers();
+            InventoryImport.open({
+                isNew: false,
+                onDone: (result, count) => {
+                    renderInventoryTable();
+                    if (paletteSelect.value === 'my_inventory') updatePalette();
+                }
+            });
+        });
+    }
 
     // --- Feedback Modal ---
     const feedbackModalEl = document.getElementById('feedbackModal');

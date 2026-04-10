@@ -362,6 +362,65 @@ app.post('/api/ai/colorize', async (req, res) => {
     }
 });
 
+// --- 色卡识别 ---
+
+app.post('/api/ai/extract-colorcard', async (req, res) => {
+    const apiKey = process.env.QWEN_API_KEY;
+    if (!apiKey) return res.status(503).json({ error: 'QWEN_API_KEY 未配置' });
+
+    const { imageBase64 } = req.body;
+    if (!imageBase64) return res.status(400).json({ error: '缺少 imageBase64' });
+
+    const prompt = `这是一张拼豆品牌色卡图片，每个颜色方块旁印有编号（如 A12、B3、001 等）。
+请识别图片中每个独立颜色方块，提取其编号和颜色值。
+只输出纯 JSON，不要任何解释，不要 markdown 代码块：
+{"colors":[{"id":"A12","hex":"#AABBCC"},{"id":"B3","hex":"#DDEEFF"},...]}`;
+
+    try {
+        const response = await fetch('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                model: 'qwen-vl-plus',
+                messages: [{
+                    role: 'user',
+                    content: [
+                        { type: 'image_url', image_url: { url: imageBase64 } },
+                        { type: 'text', text: prompt }
+                    ]
+                }],
+                max_tokens: 3000
+            })
+        });
+
+        if (!response.ok) {
+            const errText = await response.text();
+            return res.status(502).json({ error: `Qwen API 错误 (${response.status}): ${errText}` });
+        }
+
+        const data = await response.json();
+        const rawText = (data.choices?.[0]?.message?.content || '').trim();
+
+        const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) {
+            return res.status(502).json({ error: 'AI 返回格式异常，无法解析', raw: rawText.slice(0, 200) });
+        }
+
+        const parsed = JSON.parse(jsonMatch[0]);
+        // 过滤非法 hex 格式，避免脏数据进库存
+        const colors = (parsed.colors || []).filter(c =>
+            c && typeof c.hex === 'string' && /^#[0-9A-Fa-f]{6}$/.test(c.hex)
+        ).map(c => ({ id: String(c.id || c.hex), hex: c.hex.toUpperCase() }));
+
+        res.json({ colors });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // --- Events API ---
 
 app.post('/api/events', async (req, res) => {

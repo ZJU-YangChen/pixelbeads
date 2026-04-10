@@ -303,6 +303,25 @@ const StorageService = {
         );
     },
 
+    getCurrentUserId() {
+        return this.currentUser ? String(this.currentUser.id) : null;
+    },
+
+    async batchImport(items) {
+        // 用新色板完整替换当前库存
+        this.inventory = items;
+        if (!this.currentUser) return;
+        const res = await fetch(`${API_BASE}/api/inventory/${this.currentUser.id}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(items)
+        });
+        if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            throw new Error(data.error || '导入失败，请重试');
+        }
+    },
+
     getPaletteForPixelIt() {
         // Return array of [r,g,b] arrays, NOT objects
         return this.getInventory().map(item => {
