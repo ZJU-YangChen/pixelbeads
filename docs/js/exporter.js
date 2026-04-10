@@ -85,92 +85,96 @@ const Exporter = {
         const h = grid.length;
         const w = grid[0].length;
 
-        // 行列标号边距
-        const LABEL = 20;
-        const totalW = LABEL + w * cellSize;
-        const totalH = LABEL + h * cellSize;
+        // 与预览画布一致：25px 标注边距，每5格显示一个标号
+        const MARGIN = 25;
+        const LABEL_INTERVAL = 5;
 
         const canvas = document.createElement('canvas');
-        canvas.width = totalW;
-        canvas.height = totalH;
+        canvas.width  = MARGIN + w * cellSize;
+        canvas.height = MARGIN + h * cellSize;
         const ctx = canvas.getContext('2d');
 
-        // 背景
+        // 白色背景
         ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, totalW, totalH);
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        // 标号区背景
-        ctx.fillStyle = '#f0f0f0';
-        ctx.fillRect(0, 0, totalW, LABEL);       // 顶部列标
-        ctx.fillRect(0, 0, LABEL, totalH);        // 左侧行标
-
-        // 列字母函数（A-Z, AA-AZ, ...）
-        const colLabel = (n) => {
-            let label = '';
-            let idx = n + 1;
-            while (idx > 0) {
-                idx--;
-                label = String.fromCharCode(65 + (idx % 26)) + label;
-                idx = Math.floor(idx / 26);
-            }
-            return label;
-        };
-
-        // 绘制标号文字
-        const labelFontSize = Math.max(6, Math.min(10, cellSize - 4));
-        ctx.font = `bold ${labelFontSize}px Arial`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillStyle = '#555555';
-
-        // 列标（顶部）
-        for (let x = 0; x < w; x++) {
-            ctx.fillText(colLabel(x), LABEL + x * cellSize + cellSize / 2, LABEL / 2);
-        }
-        // 行标（左侧）
-        for (let y = 0; y < h; y++) {
-            ctx.fillText(String(y + 1), LABEL / 2, LABEL + y * cellSize + cellSize / 2);
-        }
-
-        // 边框线：分隔标号区和内容区
-        ctx.strokeStyle = '#cccccc';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(LABEL, 0); ctx.lineTo(LABEL, totalH);
-        ctx.moveTo(0, LABEL); ctx.lineTo(totalW, LABEL);
-        ctx.stroke();
-
-        // Draw cells
+        // ── 格子填色 ──
         grid.forEach((row, y) => {
             row.forEach((cell, x) => {
                 if (cell.empty) return;
-
-                const px = LABEL + x * cellSize;
-                const py = LABEL + y * cellSize;
-
-                // Fill
                 ctx.fillStyle = cell.hex;
-                ctx.fillRect(px, py, cellSize, cellSize);
+                ctx.fillRect(MARGIN + x * cellSize, MARGIN + y * cellSize, cellSize, cellSize);
+            });
+        });
 
-                // Grid line
-                ctx.strokeStyle = '#cccccc';
-                ctx.lineWidth = 0.5;
-                ctx.strokeRect(px, py, cellSize, cellSize);
+        // ── 网格线（与预览一致：每5格加粗）──
+        ctx.save();
+        ctx.translate(MARGIN, MARGIN);
+        ctx.strokeStyle = '#cccccc';
 
-                // Palette index (optional)
-                if (opts.showNumbers) {
+        for (let x = 1; x < w; x++) {
+            ctx.lineWidth = (x % LABEL_INTERVAL === 0) ? 1.5 : 0.5;
+            ctx.beginPath();
+            ctx.moveTo(x * cellSize, 0);
+            ctx.lineTo(x * cellSize, h * cellSize);
+            ctx.stroke();
+        }
+        for (let y = 1; y < h; y++) {
+            ctx.lineWidth = (y % LABEL_INTERVAL === 0) ? 1.5 : 0.5;
+            ctx.beginPath();
+            ctx.moveTo(0, y * cellSize);
+            ctx.lineTo(w * cellSize, y * cellSize);
+            ctx.stroke();
+        }
+        // 外框
+        ctx.lineWidth = 1;
+        ctx.strokeRect(0, 0, w * cellSize, h * cellSize);
+        ctx.restore();
+
+        // ── 调色板编号（可选）──
+        if (opts.showNumbers) {
+            grid.forEach((row, y) => {
+                row.forEach((cell, x) => {
+                    if (cell.empty) return;
                     const r = parseInt(cell.hex.substr(1,2),16);
                     const g = parseInt(cell.hex.substr(3,2),16);
                     const b = parseInt(cell.hex.substr(5,2),16);
                     const yiq = ((r*299)+(g*587)+(b*114))/1000;
                     ctx.fillStyle = (yiq >= 128) ? 'rgba(0,0,0,0.75)' : 'rgba(255,255,255,0.9)';
-                    ctx.font = `${Math.floor(cellSize/2.5)}px Arial`;
+                    ctx.font = `${Math.floor(cellSize / 2.5)}px Arial`;
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
-                    ctx.fillText(cell.paletteIndex, px + cellSize/2, py + cellSize/2);
-                }
+                    ctx.fillText(cell.paletteIndex,
+                        MARGIN + x * cellSize + cellSize / 2,
+                        MARGIN + y * cellSize + cellSize / 2);
+                });
             });
-        });
+        }
+
+        // ── 行列标号（与预览一致：数字，每5格+首格）──
+        ctx.fillStyle = '#000000';
+        ctx.font = 'bold 10px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        // 列号（顶部）
+        for (let x = 0; x < w; x++) {
+            const globalX = x + 1;
+            if (globalX === 1 || globalX % LABEL_INTERVAL === 0) {
+                ctx.fillText(globalX,
+                    MARGIN + x * cellSize + cellSize / 2,
+                    MARGIN / 2);
+            }
+        }
+        // 行号（左侧）
+        for (let y = 0; y < h; y++) {
+            const globalY = y + 1;
+            if (globalY === 1 || globalY % LABEL_INTERVAL === 0) {
+                ctx.fillText(globalY,
+                    MARGIN / 2,
+                    MARGIN + y * cellSize + cellSize / 2);
+            }
+        }
 
         return canvas;
     }
